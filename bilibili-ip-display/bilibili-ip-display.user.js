@@ -6,6 +6,8 @@
 // @author       czefan
 // @match        *://*.bilibili.com/*
 // @exclude      *://member.bilibili.com*
+// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/bilibili-ip-display/bilibili-ip-display.user.js
+// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/bilibili-ip-display/bilibili-ip-display.user.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==

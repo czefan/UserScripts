@@ -10,6 +10,8 @@
 // @match        *://ehall.xjtu.edu.cn/*
 // @match        *://lms.xjtu.edu.cn/*
 // @match        *://class.xjtu.edu.cn/*
+// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/xjtu-enhanced/xjtu-enhanced-pc.user.js
+// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/xjtu-enhanced/xjtu-enhanced-pc.user.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==

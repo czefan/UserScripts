@@ -7,6 +7,8 @@
 // @match        *://jwxt.xjtu.edu.cn/*
 // @match        *://dean.xjtu.edu.cn/*
 // @match        *://jwc.xjtu.edu.cn/*
+// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/xjtu-enhanced/xjtu-enhanced-m.user.js
+// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/xjtu-enhanced/xjtu-enhanced-m.user.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==

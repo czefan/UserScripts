@@ -5,6 +5,8 @@
 // @description  批量检测 GitHub 用户名可用性
 // @author       czefan
 // @match        https://github.com/settings/admin
+// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/github-username-check/github-username-finecheck.user.js
+// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/github-username-check/github-username-finecheck.user.js
 // @grant        none
 // ==/UserScript==
 
