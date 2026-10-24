@@ -14,10 +14,11 @@
 
 | 站点 | 脚本名称 | 脚本功能 | 安装 |
 | :----: | :---- | :---- | :----: |
-| [<img src="https://www.bilibili.com/favicon.ico" height="16px" />](./bilibili-ip-display) | **B站评论区开盒** | 在 B 站评论区显示用户 IP 属地。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/bilibili-ip-display/bilibili-ip-display.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/bilibili-ip-display/bilibili-ip-display.user.js)** |
-| [<img src="https://github.githubassets.com/favicons/favicon.svg" height="16px" />](./github-username-check) | **GitHub 用户名助手 - 精筛版** | 批量检测 GitHub 用户名可用性。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/github-username-check/github-username-finecheck.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/github-username-check/github-username-finecheck.user.js)** |
-| [<img src="https://www.xjtu.edu.cn/favicon.ico" height="16px" />](./xjtu-enhanced) | **XJTU-Enhanced-PC** | 优化 XJTU 网站 PC 端的排版与体验。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/xjtu-enhanced/xjtu-enhanced-pc.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/xjtu-enhanced/xjtu-enhanced-pc.user.js)** |
-| [<img src="https://www.xjtu.edu.cn/favicon.ico" height="16px" />](./xjtu-enhanced) | **XJTU-Enhanced-Mobile** | 优化 XJTU 网站移动端的排版与体验。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/xjtu-enhanced/xjtu-enhanced-m.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/xjtu-enhanced/xjtu-enhanced-m.user.js)** |
+| [<img src="https://www.bilibili.com/favicon.ico" alt="Bilibili" height="16px" />](./bilibili-ip-display) | **B站评论区开盒** | 在 B 站评论区显示用户 IP 属地。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/bilibili-ip-display/bilibili-ip-display.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/bilibili-ip-display/bilibili-ip-display.user.js)** |
+| [<img src="https://github.githubassets.com/favicons/favicon.svg" alt="GitHub" height="16px" />](./github-username-check) | **GitHub 用户名助手 - 精筛版** | 批量检测 GitHub 用户名可用性。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/github-username-check/github-username-finecheck.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/github-username-check/github-username-finecheck.user.js)** |
+| [<img src="https://www.xjtu.edu.cn/favicon.ico" alt="XJTU" height="16px" />](./xjtu-enhanced) | **XJTU-Enhanced-PC** | 优化 XJTU 网站 PC 端的排版与体验。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/xjtu-enhanced/xjtu-enhanced-pc.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/xjtu-enhanced/xjtu-enhanced-pc.user.js)** |
+| [<img src="https://www.xjtu.edu.cn/favicon.ico" alt="XJTU" height="16px" />](./xjtu-enhanced) | **XJTU-Enhanced-Mobile** | 优化 XJTU 网站移动端的排版与体验。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/xjtu-enhanced/xjtu-enhanced-m.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/xjtu-enhanced/xjtu-enhanced-m.user.js)** |
+| [<img src="https://cdn.simpleicons.org/apifox" alt="Apifox" height="16px" />](./apifox-optimizer) | **Apifox 界面紧凑优化** | 优化 Apifox Web 端界面布局，压缩顶栏与侧栏，折叠按钮置顶。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/apifox-optimizer/apifox-optimizer.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/apifox-optimizer/apifox-optimizer.user.js)** |
 
 ---
 
@@ -27,6 +28,7 @@
 2. 点击上方表格中的 **`[安装]`** 或 **`[备用]`**，在弹出的页面中确认安装。
 
 > [!IMPORTANT]
+>
 > - 仅支持 **Tampermonkey 正式版**。
 > - 重装前需在扩展的**回收站中彻底删除**旧脚本。
 
@@ -35,16 +37,19 @@
 ## 常见问题排查
 
 ### 1. 脚本在部分网站无法运行 (Tampermonkey v5.0.0+)
+
 1. 打开 Tampermonkey 设置。
 2. 将 `配置模式` 改为 **`高级`**。
 3. 找到 `安全` -> `修改内容安全策略（CSP）头信息`。
 4. 改为 **`全部移除`** 并保存。
 
 ### 2. 脚本完全不运行 (Tampermonkey v5.2.0+)
-* 在浏览器扩展管理页面，启用 **`开发者模式`**。
+
+- 在浏览器扩展管理页面，启用 **`开发者模式`**。
 
 ### 3. 谷歌系浏览器无法运行脚本
-* 在浏览器扩展管理 -> Tampermonkey 详情中，启用 **`允许运行用户脚本`**。
+
+- 在浏览器扩展管理 -> Tampermonkey 详情中，启用 **`允许运行用户脚本`**。
 
 ---
 
