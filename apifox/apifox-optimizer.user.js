@@ -1,18 +1,21 @@
 // ==UserScript==
 // @name         Apifox 界面紧凑优化
 // @namespace    https://github.com/czefan/UserScripts
-// @version      1.0.0
+// @version      0.1.0
 // @description  优化 Apifox Web 端布局：折叠按钮置顶、46px 极窄侧边栏、35px 紧凑顶栏与标签栏高度压缩
 // @author       czefan
-// @match        https://app.apifox.com/*
+// @license      GPL-3.0
 // @icon         https://apifox.com/favicon.ico
-// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/apifox-optimizer/apifox-optimizer.user.js
-// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/apifox-optimizer/apifox-optimizer.user.js
+// @homepageURL  https://github.com/czefan/UserScripts
+// @supportURL   https://github.com/czefan/UserScripts/issues
+// @match        https://app.apifox.com/*
+// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/apifox/apifox-optimizer.user.js
+// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/apifox/apifox-optimizer.user.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
     // 注入全局优化样式

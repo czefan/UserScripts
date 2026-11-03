@@ -1,12 +1,17 @@
 // ==UserScript==
 // @name         GitHub 用户名助手 - 精筛版
 // @namespace    https://github.com/czefan/UserScripts
-// @version      1.0.0
+// @version      0.1.0
 // @description  批量检测 GitHub 用户名可用性
 // @author       czefan
+// @license      GPL-3.0
+// @icon         https://github.githubassets.com/favicons/favicon.svg
+// @homepageURL  https://github.com/czefan/UserScripts
+// @supportURL   https://github.com/czefan/UserScripts/issues
 // @match        https://github.com/settings/admin
-// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/github-username-check/github-username-finecheck.user.js
-// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/github-username-check/github-username-finecheck.user.js
+// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/github/github-username-finecheck.user.js
+// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/github/github-username-finecheck.user.js
+// @run-at       document-idle
 // @grant        none
 // ==/UserScript==
 
