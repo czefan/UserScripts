@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         GitHub 用户名助手 - 精筛版
+// @name         GitHub 用户名检测
 // @namespace    https://github.com/czefan/UserScripts
 // @version      0.1.0
 // @description  批量检测 GitHub 用户名可用性
@@ -9,8 +9,8 @@
 // @homepageURL  https://github.com/czefan/UserScripts
 // @supportURL   https://github.com/czefan/UserScripts/issues
 // @match        https://github.com/settings/admin
-// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/github/github-username-finecheck.user.js
-// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/github/github-username-finecheck.user.js
+// @updateURL    https://raw.githubusercontent.com/czefan/UserScripts/main/github/github-username-checker.user.js
+// @downloadURL  https://raw.githubusercontent.com/czefan/UserScripts/main/github/github-username-checker.user.js
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
@@ -33,6 +33,7 @@
     let targetList = [], confirmedList = [], currentIndex = 0;
     let fontSize = parseInt(localStorage.getItem(SK.FONT) || '15', 10);
     let soundEnabled = localStorage.getItem(SK.SOUND) === 'true';
+    let audioCtx = null;
 
     // ==================== 工具函数 ====================
     const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -122,7 +123,7 @@
     .fs-body::-webkit-scrollbar-thumb:hover, #fs-win::-webkit-scrollbar-thumb:hover, #fs-ipt::-webkit-scrollbar-thumb:hover { background-color:rgba(140,149,159,.55) !important; border-width:1px; }
     </style>
     <div class="fs-hdr" id="fs-hdr">
-        <span class="t">GitHub 用户名精筛</span>
+        <span class="t">GitHub 用户名检测</span>
         <div class="c">
             <div class="fs-fc"><span>字号:</span>
                 <div class="fs-fb"><span class="v" id="fs-fv">${fontSize}</span>
@@ -139,7 +140,7 @@
         <div class="fs-hint">在下方粘贴待测名单 (空格、逗号或回车分隔):</div>
         <textarea id="fs-ipt" class="fs-ta" placeholder="example: api, bus, cxk"></textarea>
         <div class="fs-btns">
-            <button type="button" id="fs-go" class="fs-btn">开始精筛</button>
+            <button type="button" id="fs-go" class="fs-btn">开始检测</button>
             <button type="button" id="fs-rst" class="fs-btn">重置</button>
         </div>
         <div class="fs-stline">状态: <span id="fs-st" style="font-weight:bold;color:#0969da">等待启动</span></div>
@@ -202,21 +203,26 @@
 
     function resetUI() {
         iptList.disabled = false;
-        btnGo.innerText = '开始精筛';
+        btnGo.innerText = '开始检测';
         btnGo.style.background = '#2da44e';
     }
 
     function playSound() {
         if (!soundEnabled) return;
         try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = ctx.createOscillator(), g = ctx.createGain();
+            if (!audioCtx || audioCtx.state === 'closed') {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
             osc.type = 'sine'; osc.frequency.value = 880;
-            osc.connect(g); g.connect(ctx.destination);
-            osc.start(ctx.currentTime);
-            g.gain.setValueAtTime(0.1, ctx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-            osc.stop(ctx.currentTime + 0.4);
+            osc.connect(g); g.connect(audioCtx.destination);
+            osc.start(audioCtx.currentTime);
+            g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+            osc.stop(audioCtx.currentTime + 0.4);
         } catch { }
     }
 
@@ -258,7 +264,7 @@
                 resetUI();
             }
         }
-    }, 50);
+    }, 200);
 
     // ==================== 拖拽 ====================
     let isDragging = false, startX = 0, startY = 0, initL = 0, initT = 0;
@@ -316,12 +322,17 @@
         if (!isRunning) { syncListState(); localStorage.setItem(SK.LIST, iptList.value); }
     });
 
-    btnCpy.addEventListener('click', e => {
-        e.preventDefault(); e.stopPropagation();
+    btnCpy.addEventListener('click', async e => {
+        e.preventDefault();
+        e.stopPropagation();
         const hasVal = !!txtWin.value;
         if (hasVal) {
             try {
-                navigator.clipboard.writeText(txtWin.value);
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(txtWin.value);
+                } else {
+                    throw new Error('Clipboard API unavailable');
+                }
             } catch {
                 txtWin.select();
                 document.execCommand('copy');
@@ -334,9 +345,8 @@
         setTimeout(() => { btnCpy.textContent = '复制'; btnCpy.style.color = '#24292f'; }, 500);
     });
 
-
     // ==================== 核心检测引擎 ====================
-    async function startScreening() {
+    async function startChecking() {
         targetList = parseList(iptList.value);
         if (!targetList.length) { alert('请先粘贴待测名单！'); return; }
 
@@ -348,13 +358,13 @@
         }
 
         isRunning = true;
-        setStatus('⚡ 正在精筛中...', '#0969da');
+        setStatus('⚡ 正在检测中...', '#0969da');
         iptList.disabled = true;
-        btnGo.innerText = '停止精筛';
+        btnGo.innerText = '停止检测';
         btnGo.style.background = '#cf222e';
         lblTotal.innerText = targetList.length;
         const key = getListKey(targetList);
-        logToPanel(`▶ 启动精筛：总量=${targetList.length}`, '#2da44e');
+        logToPanel(`▶ 启动检测：总量=${targetList.length}`, '#2da44e');
         localStorage.setItem(SK.LIST, iptList.value);
 
         for (let i = currentIndex; i < targetList.length; i++) {
@@ -436,7 +446,7 @@
                     setStatus(`🚨 限流冷却 (${Math.max(0, (end - Date.now()) / 1000).toFixed(1)}s)`, '#cf222e');
                     await sleep(100);
                 }
-                if (isRunning) setStatus('⚡ 正在精筛中...', '#0969da');
+                if (isRunning) setStatus('⚡ 正在检测中...', '#0969da');
                 i--; // 回退索引，for 循环 i++ 后恢复原值，重试当前用户名
                 continue;
             } else if (result === 'error') {
@@ -449,8 +459,8 @@
             isRunning = false;
             localStorage.setItem('gh_check_index_' + key, targetList.length);
             currentIndex = 0;
-            setStatus('精筛结束！', '#2da44e');
-            logToPanel('🎉 精筛全部结束！', '#2da44e');
+            setStatus('检测结束！', '#2da44e');
+            logToPanel('🎉 检测全部结束！', '#2da44e');
             updateProgress(targetList.length, targetList.length);
         } else {
             setStatus('任务已中止', '#bf8700');
@@ -464,12 +474,12 @@
     btnGo.addEventListener('click', e => {
         e.preventDefault(); e.stopPropagation();
         if (!isRunning) {
-            // 检查当前名单是否已全部筛完
+            // 检查当前名单是否已全部检测完
             const tmpList = parseList(iptList.value);
             const key = getListKey(tmpList);
             const savedIdx = localStorage.getItem('gh_check_index_' + key);
             if (savedIdx !== null && parseInt(savedIdx, 10) >= tmpList.length) {
-                if (confirm('🔍 当前名单已全部筛完！\n是否重置进度重新扫描？')) {
+                if (confirm('🔍 当前名单已全部检测完毕！\n是否重置进度重新扫描？')) {
                     currentIndex = 0;
                     confirmedList = [];
                     localStorage.setItem('gh_check_index_' + key, 0);
@@ -482,7 +492,7 @@
                     return;
                 }
             }
-            startScreening();
+            startChecking();
         } else {
             isRunning = false;
             btnGo.disabled = true;

@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         抖音无水印下载
+// @name         抖音下载
 // @namespace    https://github.com/czefan/UserScripts
 // @version      0.1.0
-// @description  按需提取抖音当前播放视频的无水印直链并支持下载，无后台常驻消耗。
+// @description  按需提取抖音当前播放视频的直链并支持下载，无后台常驻消耗。
 // @author       czefan
 // @license      GPL-3.0
 // @icon         https://www.douyin.com/favicon.ico
@@ -97,7 +97,7 @@
             s.textContent = `window.__douyinDownloaderExtract = () => ${MAIN_EXTRACT_SNIPPET};`;
             (document.head || document.documentElement).appendChild(s);
             s.remove();
-        } catch (e) {}
+        } catch (e) { }
     }
 
     function extractActiveDouyinVideo() {
@@ -107,7 +107,7 @@
                 if (typeof unsafeWindow.__douyinDownloaderExtract !== 'function') injectMainWorldBridge();
                 res = unsafeWindow.__douyinDownloaderExtract?.() || (unsafeWindow.eval ? unsafeWindow.eval(MAIN_EXTRACT_SNIPPET) : null);
             }
-        } catch (e) {}
+        } catch (e) { }
         if (!res?.url) return null;
 
         const url = res.url.replace('playwm', 'play');
