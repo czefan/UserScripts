@@ -46,11 +46,14 @@ function githubFixture(fetch) {
     return { c, saved, input, ac, dialog };
 }
 
-test('GitHub cache preserves order and normalizes case', () => {
+test('GitHub cache preserves order, normalizes case, and bounds key length', () => {
     const { c } = githubFixture();
     assert.notEqual(c.getListKey(['aaa', 'bbb']), c.getListKey(['bbb', 'aaa']));
     assert.equal(vm.runInContext("parseList('AAA, aaa，BBB').join(',')", c), 'aaa,bbb');
     assert.notEqual(c.getListKey(['aa', 'bb']), c.getListKey(['bb', 'aa']));
+    const largeKey = c.getListKey(Array.from({ length: 1000 }, (_, i) => `user-${i}`));
+    assert.match(largeKey, /^v2_[0-9a-z]+_[0-9a-z]+$/);
+    assert.ok(largeKey.length < 32);
 });
 
 test('GitHub only confirms successful checks, retains the real rename input', async () => {

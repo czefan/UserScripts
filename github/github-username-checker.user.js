@@ -43,8 +43,17 @@
     const parseList = text => [...new Set(text.toLowerCase().split(/[\s,，]+/).filter(s => s))];
 
     function getListKey(list) {
-        // 顺序参与键值；使用新版本键，避免沿用旧版本可能误报的结果。
-        return 'v2_' + JSON.stringify(list);
+        // 顺序参与哈希；使用 v2 前缀避免沿用旧版结果，同时保持固定短键名防止撑爆 localStorage。
+        const s = JSON.stringify(list || []);
+        let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+        for (let i = 0; i < s.length; i++) {
+            const ch = s.charCodeAt(i);
+            h1 = Math.imul(h1 ^ ch, 2654435761);
+            h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        return `v2_${(h2 >>> 0).toString(36)}_${(h1 >>> 0).toString(36)}`;
     }
 
     function stopChecking() {
