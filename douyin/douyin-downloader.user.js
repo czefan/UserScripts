@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         抖音下载
 // @namespace    https://github.com/czefan/UserScripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  按需提取抖音当前播放视频的直链并支持下载，无后台常驻消耗。
 // @author       czefan
 // @license      GPL-3.0
@@ -61,7 +61,7 @@
                         if (!playLink && vid) {
                             playLink = 'https://www.douyin.com/aweme/v1/play/?video_id=' + vid + '&ratio=1080p&line=0';
                         }
-                        cleanUrl = playLink || xgList.find(s => s?.startsWith('http') && !s.startsWith('blob:')) || '';
+                        cleanUrl = cleanUrl || playLink || xgList.find(s => s?.startsWith('http') && !s.startsWith('blob:')) || '';
 
                         if (a) {
                             title = title || a.desc || a.title || '';
@@ -250,37 +250,65 @@
             }
             renderData(currentMedia);
 
-            btnCopy.addEventListener('click', () => {
+            btnCopy.addEventListener('click', async () => {
                 if (!currentMedia?.url) return;
-                const onOk = () => flashSuccess(btnCopy, ICONS.copy);
-                if (typeof GM_setClipboard === 'function') { GM_setClipboard(currentMedia.url); onOk(); }
-                else navigator.clipboard.writeText(currentMedia.url).then(onOk);
+                try {
+                    if (typeof GM_setClipboard === 'function') GM_setClipboard(currentMedia.url);
+                    else await navigator.clipboard.writeText(currentMedia.url);
+                    flashSuccess(btnCopy, ICONS.copy);
+                } catch {
+                    alert('复制失败，请手动复制链接。');
+                }
             });
 
             btnDownload.addEventListener('click', () => {
                 if (!currentMedia?.url || isDownloading) return;
+                const mediaToDownload = { ...currentMedia };
                 isDownloading = true;
+                btnDownload.disabled = true;
+                let settled = false;
+                const release = () => {
+                    if (settled) return false;
+                    settled = true;
+                    isDownloading = false;
+                    btnDownload.disabled = false;
+                    return true;
+                };
                 const onOk = () => {
+                    if (!release()) return;
                     flashSuccess(btnDownload, ICONS.download);
-                    setTimeout(() => { isDownloading = false; }, 1200);
                 };
                 const fallbackSave = () => {
-                    const a = document.createElement('a');
-                    a.href = currentMedia.url;
-                    a.download = currentMedia.filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    onOk();
+                    if (!release()) return;
+                    try {
+                        const a = document.createElement('a');
+                        a.href = mediaToDownload.url;
+                        a.download = mediaToDownload.filename;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        document.body.appendChild(a);
+                        try { a.click(); } finally { a.remove(); }
+                        alert('已尝试在新标签页打开视频链接；若未自动下载，请右键另存为。');
+                    } catch {
+                        alert('下载失败，请复制链接后手动下载。');
+                    }
                 };
                 if (typeof GM_download === 'function') {
-                    GM_download({
-                        url: currentMedia.url,
-                        name: currentMedia.filename,
-                        saveAs: false,
-                        onload: onOk,
-                        onerror: () => { isDownloading = false; fallbackSave(); }
-                    });
+                    try {
+                        GM_download({
+                            url: mediaToDownload.url,
+                            name: mediaToDownload.filename,
+                            saveAs: false,
+                            onload: onOk,
+                            onerror: fallbackSave,
+                            ontimeout: () => {
+                                if (!release()) return;
+                                alert('下载超时，请重试或复制链接手动下载。');
+                            }
+                        });
+                    } catch {
+                        fallbackSave();
+                    }
                 } else {
                     fallbackSave();
                 }

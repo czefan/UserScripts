@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GitHub 用户名检测
 // @namespace    https://github.com/czefan/UserScripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  批量检测 GitHub 用户名可用性
 // @author       czefan
 // @license      GPL-3.0
@@ -20,6 +20,7 @@
 
     // ==================== 常量 ====================
     const CHECK_TIMEOUT = 8000;      // 单次接口校验的超时时间限制(毫秒)
+    const CHECK_INTERVAL = 500;      // 串行请求之间的间隔，避免连续突发请求
     const RATE_LIMIT_COOL = 20000;   // 遭遇 GitHub 限流时的冷却退避时长(毫秒)
 
     const USERNAME_RE = /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,38}$/i;
@@ -30,6 +31,7 @@
 
     // ==================== 状态 ====================
     let isRunning = false;
+    let activeRun = null;
     let targetList = [], confirmedList = [], currentIndex = 0;
     let fontSize = parseInt(localStorage.getItem(SK.FONT) || '15', 10);
     let soundEnabled = localStorage.getItem(SK.SOUND) === 'true';
@@ -38,14 +40,20 @@
     // ==================== 工具函数 ====================
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const jsonSafe = (s, fb) => { try { return JSON.parse(s); } catch { return fb; } };
-    const parseList = text => [...new Set(text.split(/[\s,，]+/).filter(s => s))];
+    const parseList = text => [...new Set(text.toLowerCase().split(/[\s,，]+/).filter(s => s))];
 
     function getListKey(list) {
-        if (!list?.length) return 'empty';
-        const s = [...new Set(list)].sort().join(',');
-        let h = 0;
-        for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; }
-        return 'hash_' + Math.abs(h);
+        // 顺序参与键值；使用新版本键，避免沿用旧版本可能误报的结果。
+        return 'v2_' + JSON.stringify(list);
+    }
+
+    function stopChecking() {
+        const run = activeRun;
+        activeRun = null;
+        isRunning = false;
+        run?.controller.abort();
+        btnGo.disabled = false;
+        resetUI();
     }
 
     // ==================== 安全锁：运行时拦截改名操作 ====================
@@ -65,14 +73,14 @@
         }
     }, { capture: true });
 
-    // ==================== 输入赋值（等同粘贴） ====================
-    function setInputValue(el, text) {
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-        if (!setter) return;
-        setter.call(el, text);
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    // 拦截表单提交本身，覆盖键盘、不同语言按钮及 requestSubmit。
+    document.addEventListener('submit', e => {
+        if (isRunning && e.target.querySelector('input#login')) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            setStatus('检测中，请先停止任务再修改用户名', '#cf222e');
+        }
+    }, { capture: true });
 
     // ==================== UI 面板 ====================
     const box = document.createElement('div');
@@ -231,9 +239,11 @@
         targetList = parseList(iptList.value);
         const key = getListKey(targetList);
         const savedIdx = localStorage.getItem('gh_check_index_' + key);
-        currentIndex = savedIdx !== null ? parseInt(savedIdx, 10) : 0;
+        const idx = Number(savedIdx);
+        currentIndex = Number.isInteger(idx) ? Math.max(0, Math.min(idx, targetList.length)) : 0;
         updateProgress(currentIndex, targetList.length);
-        confirmedList = jsonSafe(localStorage.getItem('gh_check_winners_' + key), []);
+        const savedWinners = jsonSafe(localStorage.getItem('gh_check_winners_' + key), []);
+        confirmedList = Array.isArray(savedWinners) ? savedWinners.filter(name => targetList.includes(name)) : [];
         txtWin.value = confirmedList.join(', ');
         lblWc.innerText = confirmedList.length;
     }
@@ -241,7 +251,8 @@
     // ==================== 面板挂载：轮询 input#login 出现/消失 ====================
     setInterval(() => {
         const inputEl = document.querySelector('input#login');
-        if (inputEl) {
+        const dialog = inputEl?.closest('dialog');
+        if (inputEl && (!dialog || dialog.open)) {
             const container = inputEl.closest('dialog') || inputEl.closest('[role="dialog"]') || document.body;
             if (container && !container.contains(box)) {
                 box.style.opacity = '0';
@@ -258,7 +269,7 @@
         } else {
             if (box.parentNode) box.parentNode.removeChild(box);
             if (isRunning) {
-                isRunning = false;
+                stopChecking();
                 setStatus('窗口已关闭，自动中止任务', '#bf8700');
                 logToPanel('⚠️ 更改用户名窗口已关闭，自动中止', '#bf8700');
                 resetUI();
@@ -346,128 +357,149 @@
     });
 
     // ==================== 核心检测引擎 ====================
-    async function startChecking() {
-        targetList = parseList(iptList.value);
-        if (!targetList.length) { alert('请先粘贴待测名单！'); return; }
+    // 与页面 auto-check 组件一致，只调用校验接口，不改写真实改名输入框。
+    async function checkUsername(name, acEl, signal) {
+        const endpoint = acEl.getAttribute('src');
+        if (!endpoint) return 'unknown';
+        const url = new URL(endpoint, location.href);
+        if (url.origin !== location.origin || url.pathname !== '/account/rename_check') return 'unknown';
+        const method = acEl.getAttribute('http-method') === 'GET' ? 'GET' : 'POST';
+        const body = new FormData();
+        if (method === 'POST') {
+            const csrf = acEl.getAttribute('csrf') || acEl.querySelector('input[data-csrf]')?.value;
+            if (!csrf) return 'unknown';
+            body.append(acEl.getAttribute('csrf-field') || 'authenticity_token', csrf);
+            body.append('value', name);
+        } else {
+            url.searchParams.set('value', name);
+        }
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        signal.addEventListener('abort', abort, { once: true });
+        if (signal.aborted) abort();
+        const timeout = setTimeout(abort, CHECK_TIMEOUT);
+        try {
+            const response = await fetch(url, {
+                method, body: method === 'POST' ? body : undefined,
+                credentials: 'same-origin', redirect: 'error', signal: controller.signal
+            });
+            if (signal.aborted) return 'cancelled';
+            if (response.ok) return 'success';
+            if (response.status === 429) return 'rate-limited';
+            if (response.status === 422) return 'unavailable';
+            return 'unknown'; // 登录失效、CSRF 错误和服务故障均不能判为不可用。
+        } catch {
+            return signal.aborted ? 'cancelled' : 'unknown';
+        } finally {
+            clearTimeout(timeout);
+            signal.removeEventListener('abort', abort);
+        }
+    }
 
+    async function startChecking() {
+        if (activeRun) return;
+        syncListState();
+        if (!targetList.length) { alert('请先粘贴待测名单！'); return; }
         const inputEl = document.querySelector('input#login');
         const acEl = inputEl?.closest('auto-check');
-        if (!inputEl || !acEl) {
-            alert('未检测到输入框或校验组件！\n请先点击「更改用户名」按钮显示弹窗。');
+        const dialog = inputEl?.closest('dialog');
+        if (!inputEl || !acEl || (dialog && !dialog.open)) {
+            alert('未检测到输入框或校验组件！请先打开更改用户名弹窗。');
             return;
         }
 
+        const run = { controller: new AbortController(), list: [...targetList] };
+        activeRun = run;
         isRunning = true;
-        setStatus('⚡ 正在检测中...', '#0969da');
+        const onClose = () => {
+            if (activeRun !== run) return;
+            stopChecking();
+            setStatus('改名窗口已关闭，检测已暂停', '#bf8700');
+        };
+        dialog?.addEventListener('close', onClose, { signal: run.controller.signal });
+        dialog?.addEventListener('cancel', onClose, { signal: run.controller.signal });
         iptList.disabled = true;
         btnGo.innerText = '停止检测';
         btnGo.style.background = '#cf222e';
-        lblTotal.innerText = targetList.length;
-        const key = getListKey(targetList);
-        logToPanel(`▶ 启动检测：总量=${targetList.length}`, '#2da44e');
-        localStorage.setItem(SK.LIST, iptList.value);
-
-        for (let i = currentIndex; i < targetList.length; i++) {
-            if (!isRunning) break;
-            currentIndex = i;
-            updateProgress(i + 1, targetList.length);
-            localStorage.setItem('gh_check_index_' + key, i);
-
-            const name = targetList[i].trim();
-
-            // 本地格式校验
-            if (!USERNAME_RE.test(name)) {
-                logToPanel(`❌ [${name}] 格式不合法，略过`, '#8c959f');
-                continue;
-            }
-
-            inputEl.classList.remove('is-autocheck-successful', 'is-autocheck-errored');
-            setInputValue(inputEl, '');
-            setInputValue(inputEl, name);
-
-            // 事件监听 + class 轮询双机制等待校验结果（done 标志防重复 resolve）
-            const checkPromise = new Promise(resolve => {
-                let done = false, timer, timeout;
-                const finish = r => {
-                    if (done) return;
-                    done = true;
-                    clearInterval(timer); clearTimeout(timeout);
-                    acEl.removeEventListener('auto-check-success', onOk);
-                    acEl.removeEventListener('auto-check-error', onErr);
-                    resolve(r);
-                };
-                const onOk = () => finish('success');
-                const onErr = e => {
-                    const s = e?.detail?.response?.status;
-                    finish(s === 429 || s === 403 ? 'rate-limited' : 'error');
-                };
-
-                acEl.addEventListener('auto-check-success', onOk, { once: true });
-                acEl.addEventListener('auto-check-error', onErr, { once: true });
-
-                timer = setInterval(() => {
-                    if (inputEl.classList.contains('is-autocheck-successful')) { finish('success'); }
-                    else if (inputEl.classList.contains('is-autocheck-errored')) {
-                        const el = acEl.querySelector('.note.error, .flash-error');
-                        finish(el?.textContent?.match(/too many requests|许多/i) ? 'rate-limited' : 'error');
+        setStatus('正在检测中...', '#0969da');
+        const key = getListKey(run.list);
+        const isActive = () => activeRun === run && !run.controller.signal.aborted;
+        logToPanel(`▶ 启动检测：总量=${run.list.length}`, '#2da44e');
+        let completed = false;
+        try {
+            localStorage.setItem(SK.LIST, iptList.value);
+            for (let i = currentIndex; i < run.list.length; i++) {
+                if (!isActive()) return;
+                if (!inputEl.isConnected || (dialog && !dialog.open)) {
+                    setStatus('改名窗口已关闭，检测已暂停', '#bf8700');
+                    return;
+                }
+                const name = run.list[i];
+                currentIndex = i;
+                updateProgress(i, run.list.length);
+                localStorage.setItem('gh_check_index_' + key, i);
+                if (USERNAME_RE.test(name)) {
+                    const result = await checkUsername(name, acEl, run.controller.signal);
+                    if (!isActive()) return;
+                    if (!inputEl.isConnected || (dialog && !dialog.open)) {
+                        setStatus('改名窗口已关闭，检测已暂停', '#bf8700');
+                        return;
                     }
-                }, 100);
-                timeout = setTimeout(() => finish('timeout'), CHECK_TIMEOUT);
-            });
-
-            // 触发 auto-check 校验
-            if (typeof acEl.triggerValidation === 'function') {
-                acEl.triggerValidation();
-            } else {
-                inputEl.blur();
-                inputEl.focus();
-            }
-
-            const result = await checkPromise;
-
-            // 处理检测结果
-            if (result === 'success' || result === 'timeout') {
-                if (result === 'success') {
-                    logToPanel(`✔️ 发现可用: ${name}`, '#2da44e');
+                    if (result === 'success') {
+                        logToPanel(`✔️ 发现可用: ${name}`, '#2da44e');
+                        if (!confirmedList.includes(name)) {
+                            confirmedList.push(name);
+                            txtWin.value = confirmedList.join(', ');
+                            lblWc.innerText = confirmedList.length;
+                            localStorage.setItem('gh_check_winners_' + key, JSON.stringify(confirmedList));
+                        }
+                        playSound();
+                    } else if (result === 'rate-limited') {
+                        logToPanel(`触发限流，冷却 ${RATE_LIMIT_COOL / 1000}s 后重试`, '#cf222e');
+                        const end = Date.now() + RATE_LIMIT_COOL;
+                        while (Date.now() < end && isActive()) {
+                            setStatus(`限流冷却 (${Math.max(0, (end - Date.now()) / 1000).toFixed(1)}s)`, '#cf222e');
+                            await sleep(100);
+                        }
+                        if (!isActive()) return;
+                        setStatus('正在检测中...', '#0969da');
+                        i--;
+                        continue;
+                    } else if (result === 'unavailable') {
+                        logToPanel(`检查 [${name}] -> 不可用`, '#8c959f');
+                    } else {
+                        setStatus('校验未确认，已暂停；可点击开始重试', '#bf8700');
+                        logToPanel(`⚠️ [${name}] 请求失败或超时，保留当前位置，不计入可用名单`, '#bf8700');
+                        return;
+                    }
                 } else {
-                    logToPanel(`⚠️ 校验超时，追加到可用: ${name}`, '#bf8700');
+                    logToPanel(`❌ [${name}] 格式不合法，略过`, '#8c959f');
                 }
-                if (!confirmedList.includes(name)) {
-                    confirmedList.push(name);
-                    txtWin.value = confirmedList.join(', ');
-                    lblWc.innerText = confirmedList.length;
-                    localStorage.setItem('gh_check_winners_' + key, JSON.stringify(confirmedList));
+                currentIndex = i + 1;
+                localStorage.setItem('gh_check_index_' + key, currentIndex);
+                updateProgress(currentIndex, run.list.length);
+                if (i + 1 < run.list.length) await sleep(CHECK_INTERVAL);
+            }
+            completed = true;
+        } catch (err) {
+            if (isActive()) {
+                setStatus('检测异常，已暂停', '#cf222e');
+                logToPanel(`检测失败: ${err.message}`, '#cf222e');
+            }
+        } finally {
+            // 旧任务不得修改重置后或新任务的界面及状态。
+            if (activeRun === run) {
+                run.controller.abort();
+                activeRun = null;
+                isRunning = false;
+                btnGo.disabled = false;
+                resetUI();
+                if (completed) {
+                    setStatus('检测结束！', '#2da44e');
+                    logToPanel('🎉 检测全部结束！', '#2da44e');
                 }
-                playSound();
-            } else if (result === 'rate-limited') {
-                logToPanel(`🚨 触发限流，冷却退避 ${RATE_LIMIT_COOL / 1000}s...`, '#cf222e');
-                const end = Date.now() + RATE_LIMIT_COOL;
-                while (Date.now() < end && isRunning) {
-                    setStatus(`🚨 限流冷却 (${Math.max(0, (end - Date.now()) / 1000).toFixed(1)}s)`, '#cf222e');
-                    await sleep(100);
-                }
-                if (isRunning) setStatus('⚡ 正在检测中...', '#0969da');
-                i--; // 回退索引，for 循环 i++ 后恢复原值，重试当前用户名
-                continue;
-            } else if (result === 'error') {
-                logToPanel(`检查 [${name}] -> 不可用`, '#8c959f');
             }
         }
-
-        // 任务结束
-        if (isRunning) {
-            isRunning = false;
-            localStorage.setItem('gh_check_index_' + key, targetList.length);
-            currentIndex = 0;
-            setStatus('检测结束！', '#2da44e');
-            logToPanel('🎉 检测全部结束！', '#2da44e');
-            updateProgress(targetList.length, targetList.length);
-        } else {
-            setStatus('任务已中止', '#bf8700');
-            logToPanel('⏸️ 任务已手动中止', '#bf8700');
-        }
-        btnGo.disabled = false;
-        resetUI();
     }
 
     // ==================== 开始/停止按钮 ====================
@@ -494,10 +526,9 @@
             }
             startChecking();
         } else {
-            isRunning = false;
-            btnGo.disabled = true;
-            btnGo.innerText = '正在停止...';
-            btnGo.style.background = '#bf8700';
+            stopChecking();
+            setStatus('任务已中止', '#bf8700');
+            logToPanel('⏸️ 任务已手动中止', '#bf8700');
         }
     });
 
@@ -506,7 +537,8 @@
         e.preventDefault(); e.stopPropagation();
         if (!confirm('⚠️ 确定重置当前名单的进度吗？\n将清空检测进度与已发现的可用 ID。')) return;
 
-        isRunning = false;
+        stopChecking();
+        targetList = parseList(iptList.value);
         currentIndex = 0;
         confirmedList = [];
         const key = getListKey(targetList);
@@ -523,6 +555,7 @@
 
     // ==================== 初始化：恢复上次进度 ====================
     setTimeout(() => {
+        if (isRunning || iptList.value) return;
         try {
             const saved = localStorage.getItem(SK.LIST);
             if (saved) {

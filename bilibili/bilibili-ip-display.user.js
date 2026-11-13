@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         B站评论区开盒
 // @namespace    https://github.com/czefan/UserScripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  在 B 站评论区显示用户 IP 属地
 // @author       czefan
 // @license      GPL-3.0
@@ -19,21 +19,29 @@
 (function () {
   "use strict";
 
-  // 已处理的评论节点记录
-  const processedNodes = new WeakSet();
+  // 标签与时间节点关联；组件复用节点时更新已有标签。
+  const labels = new WeakMap();
 
-  // 创建并插入 IP 属地标签
   function handleNode(node, item, className) {
     const location = item?.reply_control?.location;
-    if (location && !processedNodes.has(node)) {
-      processedNodes.add(node);
-      node.after(
-        Object.assign(document.createElement("span"), {
-          className: `reply-location ${className}`,
-          textContent: location,
-        })
-      );
+    let label = labels.get(node);
+    if (!location) {
+      label?.remove();
+      labels.delete(node);
+      return;
     }
+    if (!label) {
+      label = document.createElement("span");
+      label.className = `reply-location ${className}`;
+      if (className === "lit-style") {
+        // Shadow DOM 内继承组件主题，只显式补充标签间距。
+        label.style.marginLeft = "20px";
+        label.style.marginRight = "20px";
+      }
+      labels.set(node, label);
+    }
+    if (label.textContent !== location) label.textContent = location;
+    if (node.nextSibling !== label) node.after(label);
   }
 
   // 增量解析 Vue3 评论节点
@@ -44,7 +52,6 @@
 
       const nodes = rootNode.matches(selector) ? [rootNode] : rootNode.querySelectorAll(selector);
       for (const node of nodes) {
-        if (processedNodes.has(node)) continue;
         const vueComp = node.__vueParentComponent;
         const item = vueComp?.props?.reply || vueComp?.props?.subReply;
         if (item) {
@@ -54,24 +61,50 @@
     }
   }
 
-  // 拦截 Shadow DOM 创建，只观察 B 站评论与回复相关的组件
+  const shadowWatchers = new WeakMap();
+
+  function scanShadowHosts(root) {
+    const nodes = [root, ...root.querySelectorAll("*")];
+    for (const node of nodes) {
+      if (/^BILI-(COMMENT|REPLY)/i.test(node.tagName) && node.shadowRoot) {
+        watchShadow(node.shadowRoot);
+      }
+    }
+  }
+
+  function watchShadow(shadow) {
+    const existing = shadowWatchers.get(shadow);
+    if (existing) { existing(); return; }
+    let previousPubdate = null;
+    const update = () => {
+      const pubdate = shadow.getElementById("pubdate");
+      if (previousPubdate && previousPubdate !== pubdate) {
+        labels.get(previousPubdate)?.remove();
+        labels.delete(previousPubdate);
+      }
+      previousPubdate = pubdate;
+      const item = shadow.host?.data;
+      if (pubdate && item) handleNode(pubdate, item, "lit-style");
+    };
+    shadowWatchers.set(shadow, update);
+    const observer = new MutationObserver(mutations => {
+      update();
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) scanShadowHosts(node);
+        }
+      }
+    });
+    observer.observe(shadow, { childList: true, characterData: true, subtree: true });
+    update();
+    scanShadowHosts(shadow);
+  }
+
+  // 截获新组件，并补扫注入前已创建的 open Shadow Root。
   const origAttach = Element.prototype.attachShadow;
   Element.prototype.attachShadow = function (options) {
     const shadow = origAttach.call(this, options);
-
-    if (/^(BILI-(COMMENT|REPLY))/i.test(this.tagName)) {
-      const observer = new MutationObserver((_, obs) => {
-        const pubdate = shadow.getElementById("pubdate");
-        if (pubdate) {
-          obs.disconnect(); // 渲染完成后立即释放观察器
-          const item = shadow.host?.data;
-          if (item) {
-            handleNode(pubdate, item, "lit-style");
-          }
-        }
-      });
-      observer.observe(shadow, { childList: true, subtree: true });
-    }
+    if (/^BILI-(COMMENT|REPLY)/i.test(this.tagName)) watchShadow(shadow);
     return shadow;
   };
 
@@ -85,32 +118,35 @@
           margin-right: 20px;
         }
         .reply-location.vue-style { margin-left: 8px; }
-        .reply-location.lit-style { margin-left: 20px; }
       `,
     })
   );
 
-  // 动态收窄监听范围，只监听评论容器变动，规避全局弹幕等 DOM 消耗
-  let isGlobal = true;
-  const globalObserver = new MutationObserver((mutations) => {
-    if (isGlobal) {
-      const commentApp = document.getElementById("comment") || document.querySelector("bili-comments");
-      if (commentApp) {
-        isGlobal = false;
-        globalObserver.disconnect();
-        globalObserver.observe(commentApp, { childList: true, subtree: true });
-        checkVueNodes([commentApp]);
-        return;
-      }
-    }
-
+  // 评论内部由专用观察器处理，文档观察器只负责发现/替换评论容器。
+  let commentApp = null;
+  const commentObserver = new MutationObserver(mutations => {
     for (const mutation of mutations) {
-      if (mutation.addedNodes.length) {
-        checkVueNodes(mutation.addedNodes);
-      }
+      const target = mutation.target.nodeType === Node.ELEMENT_NODE
+        ? mutation.target : mutation.target.parentElement;
+      if (target) checkVueNodes([target]);
+      checkVueNodes(mutation.addedNodes);
     }
   });
 
-  // 全局启动监听，用于捕获评论区容器载入
+  function bindCommentApp() {
+    const next = document.getElementById("comment") || document.querySelector("bili-comments");
+    if (next === commentApp) return;
+    commentObserver.disconnect();
+    commentApp = next;
+    if (commentApp) {
+      commentObserver.observe(commentApp, { childList: true, characterData: true, subtree: true });
+      checkVueNodes([commentApp]);
+      scanShadowHosts(commentApp);
+    }
+  }
+
+  const globalObserver = new MutationObserver(() => bindCommentApp());
   globalObserver.observe(document.documentElement, { childList: true, subtree: true });
+  bindCommentApp();
+  scanShadowHosts(document.documentElement);
 })();

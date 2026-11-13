@@ -21,3 +21,7 @@ Thumbs.db
 
 # Local logs
 *.log
+
+# Local webpage diagnostic snapshots (may contain account data and tokens)
+/diagnostics/
+*.html
