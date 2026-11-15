@@ -11,5 +11,5 @@
     "erasableSyntaxOnly": true,
     "types": ["node", "tampermonkey"]
   },
-  "include": ["userscripts", "tools", "tests", "templates", "vitest.config.ts"]
+  "include": ["userscripts", "shared", "tools", "tests", "templates", "vitest.config.ts"]
 }

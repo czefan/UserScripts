@@ -1,3 +1,5 @@
+import { injectStyle } from '../../shared/dom.ts';
+
 export const STYLE_ID = 'apifox-compact-optimizer-style';
 
 export const COMPACT_STYLES = `
@@ -68,16 +70,7 @@ export const COMPACT_STYLES = `
     `;
 
 export function injectStyles(doc: Document = document): HTMLStyleElement {
-  const existing = doc.getElementById(STYLE_ID);
-  if (existing instanceof HTMLStyleElement) {
-    return existing;
-  }
-
-  const style = doc.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = COMPACT_STYLES;
-  (doc.head || doc.documentElement).appendChild(style);
-  return style;
+  return injectStyle(COMPACT_STYLES, { id: STYLE_ID, doc });
 }
 
 export function bindHoverTooltip(doc: Document = document): void {
