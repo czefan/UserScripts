@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '26'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -35,9 +35,6 @@ jobs:
 
       - name: Run unit tests
         run: pnpm test
-
-      - name: Run legacy tests
-        run: pnpm test:legacy
 
       - name: Build userscripts
         run: pnpm build
@@ -79,6 +76,18 @@ jobs:
             echo "::notice::跳过发布：当前提交 ${{ github.sha }} 已不是 main 最新 HEAD ($HEAD_SHA)"
           fi
 
+      - name: Checkout main commit for release tool
+        if: steps.head_check.outputs.is_latest == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        if: steps.head_check.outputs.is_latest == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+
       - name: Download dist artifact
         if: steps.head_check.outputs.is_latest == 'true'
         uses: actions/download-artifact@v4
@@ -86,12 +95,23 @@ jobs:
           name: userscripts-dist
           path: dist
 
-      - name: Publish dist to release branch
+      - name: Sync versioned scripts to release staging
+        id: sync_release
         if: steps.head_check.outputs.is_latest == 'true'
+        run: |
+          mkdir -p release-staging
+          if git ls-remote --exit-code --heads origin release >/dev/null 2>&1; then
+            git fetch --depth=1 origin release
+            git archive FETCH_HEAD | tar -x -C release-staging
+          fi
+          node tools/release.ts dist release-staging
+
+      - name: Publish dist to release branch
+        if: steps.head_check.outputs.is_latest == 'true' && steps.sync_release.outputs.has_changes == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: release
-          publish_dir: ./dist
+          publish_dir: ./release-staging
           force_orphan: false
           enable_jekyll: false

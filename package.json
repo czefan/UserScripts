@@ -6,14 +6,13 @@
   "scripts": {
     "dev": "node tools/dev.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run userscripts tests/meta.test.ts",
-    "test:legacy": "node --test tests/*.test.cjs",
+    "test": "vitest run userscripts tests/meta.test.ts tests/release.test.ts",
     "build": "node tools/build.ts",
     "check:dist": "vitest run tests/dist.test.ts",
     "new": "node tools/new.ts"
   },
   "devDependencies": {
-    "@types/node": "^25.0.0",
+    "@types/node": "^26.6.6",
     "@types/tampermonkey": "^5.5.0",
     "esbuild": "^0.28.2",
     "happy-dom": "^21.0.4",

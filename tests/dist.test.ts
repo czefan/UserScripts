@@ -49,8 +49,8 @@ describe('dist 构建产物校验', () => {
       const expectedHeader = renderHeader(id, metaModule.default);
       const { updateURL, downloadURL } = resolveUrls(id);
 
-      // 头部必须位于首行，且 .meta.js 与 .user.js 完全一致
-      expect(userJs.startsWith('// ==UserScript==\n')).toBe(true);
+      // 头部必须位于首行，与正文代码之间保留一个空行，且 .meta.js 与头部一致
+      expect(userJs.startsWith(`${expectedHeader}\n\n`)).toBe(true);
       expect(metaJs.startsWith('// ==UserScript==\n')).toBe(true);
       expect(extractHeader(userJs)).toBe(expectedHeader);
       expect(extractHeader(metaJs)).toBe(expectedHeader);

@@ -57,7 +57,7 @@ export async function buildAll(rootDir: string = process.cwd()): Promise<string[
       target: 'es2022',
       minify: false,
       write: false,
-      banner: { js: header },
+      banner: { js: `${header}\n` },
       charset: 'utf8',
     });
 

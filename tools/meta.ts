@@ -204,5 +204,5 @@ export function renderDevLoader(
     extraRequire: bundleUrl,
   });
 
-  return `${header}\n// 由本地开发服务通过 @require 加载最新构建产物，无需手动粘贴代码。\n`;
+  return `${header}\n\n// 由本地开发服务通过 @require 加载最新构建产物，无需手动粘贴代码。\n`;
 }

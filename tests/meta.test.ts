@@ -131,6 +131,7 @@ describe('userscript 元数据与目录规范', () => {
     expect(loaderA).toContain('// @exclude      https://example.com/admin/*');
     expect(loaderA).toContain('// @grant        GM_download');
     expect(loaderA).toContain('// @require      http://127.0.0.1:3456/bundle.js');
+    expect(loaderA).toContain('// ==/UserScript==\n\n// ');
     expect(loaderA).not.toContain('@updateURL');
     expect(loaderA).not.toContain('@downloadURL');
   });
