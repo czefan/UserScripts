@@ -30,6 +30,12 @@ export const SITE_META = {
   supportURL: 'https://github.com/czefan/UserScripts/issues',
 } as const;
 
+export const DEV_SCRIPT_IDENTITY = {
+  name: '[DEV] UserScripts Local',
+  namespace: `${SITE_META.namespace}#dev`,
+  version: '0.0.0-dev',
+} as const;
+
 export const RELEASE_BASE_URL =
   'https://raw.githubusercontent.com/czefan/UserScripts/release';
 
@@ -108,10 +114,19 @@ function formatTag(key: string, value?: string): string {
   return value === undefined ? `// @${key}` : `// @${key.padEnd(13)}${value}`;
 }
 
-export function renderHeader(id: string, meta: ScriptMeta): string {
-  validateMeta(id, meta);
+interface RenderBlockOptions {
+  name: string;
+  namespace: string;
+  version: string;
+  description: string;
+  meta: ScriptMeta;
+  updateURL?: string;
+  downloadURL?: string;
+  extraRequire?: string;
+}
 
-  const { updateURL, downloadURL } = resolveUrls(id);
+function renderMetadataBlock(options: RenderBlockOptions): string {
+  const { meta } = options;
   const lines: string[] = ['// ==UserScript=='];
 
   const pushScalar = (key: string, value?: string) => {
@@ -123,10 +138,10 @@ export function renderHeader(id: string, meta: ScriptMeta): string {
     }
   };
 
-  pushScalar('name', meta.name);
-  pushScalar('namespace', SITE_META.namespace);
-  pushScalar('version', meta.version);
-  pushScalar('description', meta.description);
+  pushScalar('name', options.name);
+  pushScalar('namespace', options.namespace);
+  pushScalar('version', options.version);
+  pushScalar('description', options.description);
   pushScalar('author', SITE_META.author);
   pushScalar('license', SITE_META.license);
   pushScalar('icon', meta.icon);
@@ -135,12 +150,13 @@ export function renderHeader(id: string, meta: ScriptMeta): string {
   pushList('match', meta.match);
   pushList('include', meta.include);
   pushList('exclude', meta.exclude);
-  pushScalar('updateURL', updateURL);
-  pushScalar('downloadURL', downloadURL);
+  pushScalar('updateURL', options.updateURL);
+  pushScalar('downloadURL', options.downloadURL);
   pushScalar('run-at', meta['run-at']);
   pushList('grant', meta.grant);
   pushList('connect', meta.connect);
   pushList('require', meta.require);
+  pushScalar('require', options.extraRequire);
 
   if (meta.resource) {
     for (const [name, url] of Object.entries(meta.resource)) {
@@ -155,4 +171,38 @@ export function renderHeader(id: string, meta: ScriptMeta): string {
 
   lines.push('// ==/UserScript==');
   return lines.join('\n');
+}
+
+export function renderHeader(id: string, meta: ScriptMeta): string {
+  validateMeta(id, meta);
+  const { updateURL, downloadURL } = resolveUrls(id);
+  return renderMetadataBlock({
+    name: meta.name,
+    namespace: SITE_META.namespace,
+    version: meta.version,
+    description: meta.description,
+    meta,
+    updateURL,
+    downloadURL,
+  });
+}
+
+export function renderDevLoader(
+  id: string,
+  meta: ScriptMeta,
+  bundleUrl: string,
+): string {
+  validateMeta(id, meta);
+  assertSingleLineText(`${id}.bundleUrl`, bundleUrl);
+
+  const header = renderMetadataBlock({
+    name: DEV_SCRIPT_IDENTITY.name,
+    namespace: DEV_SCRIPT_IDENTITY.namespace,
+    version: DEV_SCRIPT_IDENTITY.version,
+    description: `[DEV:${id}] ${meta.name} - ${meta.description}`,
+    meta,
+    extraRequire: bundleUrl,
+  });
+
+  return `${header}\n// 由本地开发服务通过 @require 加载最新构建产物，无需手动粘贴代码。\n`;
 }

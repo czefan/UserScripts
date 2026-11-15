@@ -4,6 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@12.18.0",
   "scripts": {
+    "dev": "node tools/dev.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run userscripts tests/meta.test.ts",
     "test:legacy": "node --test tests/*.test.cjs",

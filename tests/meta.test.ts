@@ -1,10 +1,13 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { discoverScriptIds } from '../tools/build.ts';
+import { startDevWatch } from '../tools/dev.ts';
 import {
+  DEV_SCRIPT_IDENTITY,
+  renderDevLoader,
   renderHeader,
   resolveUrls,
   validateMeta,
@@ -96,6 +99,70 @@ describe('userscript 元数据与目录规范', () => {
       await rm(missingMetaDir, { recursive: true, force: true });
 
       await expect(discoverScriptIds(sandbox)).rejects.toThrow(/缺少: index\.ts/);
+    } finally {
+      await rm(sandbox, { recursive: true, force: true });
+    }
+  });
+
+  it('renderDevLoader 固定单一开发脚本标识并安全继承目标脚本配置', () => {
+    const loaderA = renderDevLoader(
+      'script-a',
+      {
+        ...BASE_META,
+        exclude: ['https://example.com/admin/*'],
+        grant: ['GM_download'],
+      },
+      'http://127.0.0.1:3456/bundle.js',
+    );
+    const loaderB = renderDevLoader(
+      'script-b',
+      {
+        ...BASE_META,
+        name: '另一个脚本',
+        match: 'https://other.example.com/*',
+      },
+      'http://127.0.0.1:3456/bundle.js',
+    );
+
+    expect(loaderA).toContain(`// @name         ${DEV_SCRIPT_IDENTITY.name}`);
+    expect(loaderA).toContain(`// @namespace    ${DEV_SCRIPT_IDENTITY.namespace}`);
+    expect(loaderB).toContain(`// @name         ${DEV_SCRIPT_IDENTITY.name}`);
+    expect(loaderB).toContain(`// @namespace    ${DEV_SCRIPT_IDENTITY.namespace}`);
+    expect(loaderA).toContain('// @exclude      https://example.com/admin/*');
+    expect(loaderA).toContain('// @grant        GM_download');
+    expect(loaderA).toContain('// @require      http://127.0.0.1:3456/bundle.js');
+    expect(loaderA).not.toContain('@updateURL');
+    expect(loaderA).not.toContain('@downloadURL');
+  });
+
+  it('startDevWatch 写入本地 file:// 开发壳与实时产物并拒绝未知脚本', async () => {
+    await expect(
+      startDevWatch({ rootDir: ROOT_DIR, scriptId: 'not-exists' }),
+    ).rejects.toThrow(/未找到脚本/);
+
+    const sandbox = await mkdtemp(path.join(tmpdir(), 'userscripts-dev-'));
+    try {
+      const handle = await startDevWatch({
+        rootDir: ROOT_DIR,
+        distDir: sandbox,
+        scriptId: 'apifox-optimizer',
+      });
+
+      try {
+        const [loaderContent, bundleContent] = await Promise.all([
+          readFile(handle.loaderPath, 'utf8'),
+          readFile(handle.bundlePath, 'utf8'),
+        ]);
+
+        expect(handle.bundleUrl).toMatch(/^file:\/\/\//);
+        expect(loaderContent).toContain(`// @name         ${DEV_SCRIPT_IDENTITY.name}`);
+        expect(loaderContent).toContain(`// @require      ${handle.bundleUrl}`);
+        expect(loaderContent).toContain('https://app.apifox.com/*');
+        expect(bundleContent).toContain('apifox-compact-optimizer-style');
+        expect(bundleContent).not.toContain('// ==UserScript==');
+      } finally {
+        await handle.close();
+      }
     } finally {
       await rm(sandbox, { recursive: true, force: true });
     }
