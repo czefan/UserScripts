@@ -22,15 +22,16 @@
 
     // ==================== 1. 自动折叠侧边栏 ====================
     function initAutoCollapseSidebar() {
+        // TikTok 侧边栏折叠态不会挂载 DivToggleTrigger，仅展开态存在且 aria-label 为 Collapse sidebar
         const obs = new MutationObserver(() => {
             const btn = document.querySelector('[class*="DivToggleTrigger"], [class*="e1hzmt9p0"]');
-            if (btn) {
-                btn.click();
-                obs.disconnect();
-            }
+            if (!btn) return;
+            const label = btn.getAttribute?.('aria-label') || '';
+            if (!/expand|展开/i.test(label)) btn.click();
+            obs.disconnect();
         });
         obs.observe(document.documentElement, { childList: true, subtree: true });
-        setTimeout(() => obs.disconnect(), 8000);
+        setTimeout(() => obs.disconnect(), 15000);
     }
 
     // ==================== 2. 快捷键调节音量 ====================
@@ -262,7 +263,11 @@
         isApplyingVolume = true;
         suppressVolumeChangeUntil = Date.now() + 50;
         try {
-            beforeSync?.();
+            try {
+                beforeSync?.();
+            } catch {
+                // 播放器 Hook 异常时仍继续同步原生媒体音量，避免阻塞按键调节
+            }
             syncedVideos.add(video);
             if (video.volume !== volume) video.volume = volume;
             if (video.muted !== muted) video.muted = muted;
@@ -352,7 +357,7 @@
         const media = e.target;
         if (!isMediaElement(media)) return;
 
-        if (savedState && !syncedVideos.has(media)) {
+        if (savedState && (clampVolume(media.volume) !== savedState.volume || Boolean(media.muted) !== savedState.muted)) {
             applyVolumeToVideo(media, savedState.volume, savedState.muted, false);
         } else {
             syncedVideos.add(media);

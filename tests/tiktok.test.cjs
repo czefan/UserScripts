@@ -647,3 +647,109 @@ test('TikTok supports Photo Mode <audio> posts (paused or playing) with native v
     assert.equal(nextAudio.volume, 0.55);
 });
 
+test('TikTok re-syncs previously visited video when switching back after volume change', () => {
+    const videoA = { tagName: 'VIDEO', paused: false, duration: 20, volume: 0.2, muted: false };
+    const videoB = { tagName: 'VIDEO', paused: false, duration: 20, volume: 0.2, muted: false };
+    let activeVideo = videoA;
+
+    const { context } = createTikTokContext({
+        document: {
+            documentElement: {},
+            querySelector: () => null,
+            querySelectorAll: () => [activeVideo]
+        }
+    });
+
+    // 初次播放 A（20%）并被记录
+    context.handleMediaActivation({ target: videoA });
+    assert.equal(videoA.volume, 0.2);
+
+    // 切到 B 并用快捷键调高到 30%（0.2 -> 0.25 -> 0.3）
+    activeVideo = videoB;
+    context.handleMediaActivation({ target: videoB });
+    context.handleKeyDown({
+        shiftKey: true, code: 'Equal', key: '+',
+        target: { tagName: 'BODY' }, preventDefault() {}, stopPropagation() {}
+    });
+    context.handleKeyDown({
+        shiftKey: true, code: 'Equal', key: '+',
+        target: { tagName: 'BODY' }, preventDefault() {}, stopPropagation() {}
+    });
+    assert.equal(videoB.volume, 0.3);
+
+    // 滑回 A 重新激活时，应覆盖 A 的旧音量 0.2 并同步为最新 0.3
+    activeVideo = videoA;
+    context.handleMediaActivation({ target: videoA });
+    assert.equal(videoA.volume, 0.3);
+    assert.equal(videoA.muted, false);
+});
+
+test('TikTok falls back to native media volume when React controller throws', () => {
+    const brokenApi = {
+        setVolume() { throw new Error('stale hook'); },
+        setMute() { throw new Error('stale hook'); }
+    };
+    const trigger = {
+        matches: () => false,
+        __reactFiberTest: {
+            memoizedProps: {},
+            memoizedState: { memoizedState: [brokenApi, []], next: null },
+            return: null
+        },
+        dispatchEvent() {}
+    };
+    const card = {
+        querySelector: sel => (sel.includes('VolumeControlContainer') ? trigger : null)
+    };
+    const video = {
+        tagName: 'VIDEO',
+        paused: false,
+        duration: 20,
+        volume: 0.4,
+        muted: true,
+        closest: () => card
+    };
+
+    const { context } = createTikTokContext({
+        document: {
+            documentElement: {},
+            querySelector: () => null,
+            querySelectorAll: () => [video]
+        }
+    });
+
+    context.handleKeyDown({
+        shiftKey: true, code: 'Equal', key: '+',
+        target: { tagName: 'BODY' }, preventDefault() {}, stopPropagation() {}
+    });
+
+    assert.equal(video.volume, 0.1);
+    assert.equal(video.muted, false);
+});
+
+test('TikTok sidebar collapse skips clicking if button already indicates expand', () => {
+    const observers = [];
+    let clicks = 0;
+    const expandBtn = {
+        getAttribute: name => (name === 'aria-label' ? 'Expand sidebar' : null),
+        click() { clicks++; }
+    };
+    const { context } = createTikTokContext({
+        document: {
+            documentElement: {},
+            querySelector: sel => (sel.includes('DivToggleTrigger') ? expandBtn : null),
+            querySelectorAll: () => []
+        },
+        MutationObserver: class {
+            constructor(cb) { this.cb = cb; this.disconnected = false; observers.push(this); }
+            observe() {}
+            disconnect() { this.disconnected = true; }
+        }
+    });
+
+    context.initAutoCollapseSidebar();
+    observers[0].cb();
+    assert.equal(clicks, 0);
+    assert.equal(observers[0].disconnected, true);
+});
+
