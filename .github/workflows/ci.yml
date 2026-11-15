@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    name: Typecheck, Test & Build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: verify-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Run legacy tests
+        run: pnpm test:legacy
+
+      - name: Build userscripts
+        run: pnpm build
+
+      - name: Verify build artifacts
+        run: pnpm check:dist
+
+      - name: Upload dist artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: userscripts-dist
+          path: dist/
+
+  deploy-release:
+    name: Deploy to release branch
+    needs: verify
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release-deploy
+      cancel-in-progress: false
+
+    steps:
+      - name: Check if current commit is still main HEAD
+        id: head_check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+          echo "main_head=$HEAD_SHA"
+          echo "current_sha=${{ github.sha }}"
+          if [ "$HEAD_SHA" = "${{ github.sha }}" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::跳过发布：当前提交 ${{ github.sha }} 已不是 main 最新 HEAD ($HEAD_SHA)"
+          fi
+
+      - name: Download dist artifact
+        if: steps.head_check.outputs.is_latest == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: userscripts-dist
+          path: dist
+
+      - name: Publish dist to release branch
+        if: steps.head_check.outputs.is_latest == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: release
+          publish_dir: ./dist
+          force_orphan: false
+          enable_jekyll: false

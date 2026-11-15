@@ -25,3 +25,7 @@ Thumbs.db
 # Local webpage diagnostic snapshots (may contain account data and tokens)
 /diagnostics/
 *.html
+
+# Dependencies & build output
+node_modules/
+dist/

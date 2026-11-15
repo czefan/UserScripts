@@ -1,0 +1,22 @@
+{
+  "name": "userscripts",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run userscripts tests/meta.test.ts",
+    "test:legacy": "node --test tests/*.test.cjs",
+    "build": "node tools/build.ts",
+    "check:dist": "vitest run tests/dist.test.ts",
+    "new": "node tools/new.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "@types/tampermonkey": "^5.5.0",
+    "esbuild": "^0.28.2",
+    "happy-dom": "^21.0.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
