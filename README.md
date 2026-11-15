@@ -18,6 +18,7 @@
 | [<img src="https://github.githubassets.com/favicons/favicon.svg" alt="GitHub" height="16px" />](./github) | **GitHub 用户名检测** | 批量检测 GitHub 用户名可用性。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/github/github-username-checker.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/github/github-username-checker.user.js)** |
 | [<img src="https://cdn.simpleicons.org/apifox" alt="Apifox" height="16px" />](./apifox) | **Apifox 界面紧凑优化** | 优化 Apifox Web 端界面布局，压缩顶栏与侧栏，折叠按钮置顶。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/apifox/apifox-optimizer.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/apifox/apifox-optimizer.user.js)** |
 | [<img src="https://www.douyin.com/favicon.ico" alt="Douyin" height="16px" />](./douyin) | **抖音下载** | 按需提取抖音当前播放视频的直链并支持下载，无后台常驻消耗。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/douyin/douyin-downloader.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/douyin/douyin-downloader.user.js)** |
+| [<img src="https://www.tiktok.com/favicon.ico" alt="TikTok" height="16px" />](./tiktok) | **TikTok 增强** | 自动折叠 TikTok 侧边栏，支持 `Shift +` / `Shift -` 快捷键调节音量。 | **[安装](https://raw.githubusercontent.com/czefan/UserScripts/main/tiktok/tiktok-enhanced.user.js)** \| **[备用](https://cdn.jsdelivr.net/gh/czefan/UserScripts@main/tiktok/tiktok-enhanced.user.js)** |
 
 ---
 
