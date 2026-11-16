@@ -58,15 +58,8 @@ export function getVolumeDirection(e: {
   key?: string;
 }): -1 | 0 | 1 {
   if (!e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return 0;
-  if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+') return 1;
-  if (
-    e.code === 'Minus' ||
-    e.code === 'NumpadSubtract' ||
-    e.key === '_' ||
-    e.key === '-'
-  ) {
-    return -1;
-  }
+  if (e.code === 'ArrowUp' || e.key === 'ArrowUp') return 1;
+  if (e.code === 'ArrowDown' || e.key === 'ArrowDown') return -1;
   return 0;
 }
 

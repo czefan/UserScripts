@@ -108,37 +108,54 @@ describe('tiktok-enhanced', () => {
     expect(observers[0].disconnected).toBe(true);
   });
 
-  it('识别 Shift+/Shift- 快捷键并忽略输入框或非预期修饰键', () => {
+  it('识别 Shift + ↑ / ↓ 快捷键并放行单按方向键、输入框或非预期修饰键', () => {
     expect(
-      getVolumeDirection({ shiftKey: true, code: 'Equal', key: '+' }),
+      getVolumeDirection({ shiftKey: true, code: 'ArrowUp', key: 'ArrowUp' }),
     ).toBe(1);
     expect(
-      getVolumeDirection({ shiftKey: true, code: 'NumpadAdd', key: '+' }),
+      getVolumeDirection({ shiftKey: true, code: 'Numpad8', key: 'ArrowUp' }),
     ).toBe(1);
     expect(
-      getVolumeDirection({ shiftKey: true, code: 'Minus', key: '_' }),
+      getVolumeDirection({
+        shiftKey: true,
+        code: 'ArrowDown',
+        key: 'ArrowDown',
+      }),
     ).toBe(-1);
     expect(
-      getVolumeDirection({ shiftKey: true, code: 'NumpadSubtract', key: '-' }),
+      getVolumeDirection({ shiftKey: true, code: 'Numpad2', key: 'ArrowDown' }),
     ).toBe(-1);
 
     expect(
-      getVolumeDirection({ shiftKey: false, code: 'Equal', key: '=' }),
+      getVolumeDirection({ shiftKey: false, code: 'ArrowUp', key: 'ArrowUp' }),
+    ).toBe(0);
+    expect(
+      getVolumeDirection({
+        shiftKey: false,
+        code: 'ArrowDown',
+        key: 'ArrowDown',
+      }),
+    ).toBe(0);
+    expect(
+      getVolumeDirection({ shiftKey: true, code: 'Equal', key: '+' }),
+    ).toBe(0);
+    expect(
+      getVolumeDirection({ shiftKey: true, code: 'Minus', key: '_' }),
     ).toBe(0);
     expect(
       getVolumeDirection({
         shiftKey: true,
         ctrlKey: true,
-        code: 'Equal',
-        key: '+',
+        code: 'ArrowUp',
+        key: 'ArrowUp',
       }),
     ).toBe(0);
     expect(
       getVolumeDirection({
         shiftKey: true,
         altKey: true,
-        code: 'Minus',
-        key: '_',
+        code: 'ArrowDown',
+        key: 'ArrowDown',
       }),
     ).toBe(0);
 
@@ -158,7 +175,7 @@ describe('tiktok-enhanced', () => {
       muted: false,
     });
 
-    // 即使静音前记录有 0.4 音量，静音状态按 Shift + 仍从 0 起步直接加到 10%
+    // 即使静音前记录有 0.4 音量，静音状态按 Shift + ↑ 仍从 0 起步直接加到 10%
     const unmuted = computeNextVolumeState(0.4, true, 1);
     expect(unmuted).toEqual({ volume: 0.1, muted: false });
 
@@ -218,8 +235,8 @@ describe('tiktok-enhanced', () => {
     let stopped = false;
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Equal',
-      key: '+',
+      code: 'ArrowUp',
+      key: 'ArrowUp',
       target: { tagName: 'BODY' },
       preventDefault() {
         prevented = true;
@@ -311,8 +328,8 @@ describe('tiktok-enhanced', () => {
 
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Minus',
-      key: '_',
+      code: 'ArrowDown',
+      key: 'ArrowDown',
       target: { tagName: 'BODY' },
       preventDefault() {},
       stopPropagation() {},
@@ -381,8 +398,8 @@ describe('tiktok-enhanced', () => {
 
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Equal',
-      key: '+',
+      code: 'ArrowUp',
+      key: 'ArrowUp',
       target: { tagName: 'BODY' },
       preventDefault() {},
       stopPropagation() {},
@@ -459,8 +476,8 @@ describe('tiktok-enhanced', () => {
 
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Equal',
-      key: '+',
+      code: 'ArrowUp',
+      key: 'ArrowUp',
       target: { tagName: 'BODY' },
       preventDefault() {},
       stopPropagation() {},
@@ -480,8 +497,8 @@ describe('tiktok-enhanced', () => {
     reactVolume = 0.05;
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Minus',
-      key: '_',
+      code: 'ArrowDown',
+      key: 'ArrowDown',
       target: { tagName: 'BODY' },
       preventDefault() {},
       stopPropagation() {},
@@ -540,8 +557,8 @@ describe('tiktok-enhanced', () => {
 
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Equal',
-      key: '+',
+      code: 'ArrowUp',
+      key: 'ArrowUp',
       target: focusedSection,
       preventDefault() {},
       stopPropagation() {},
@@ -616,8 +633,8 @@ describe('tiktok-enhanced', () => {
     expect(styles[0].textContent).toMatch(/:focus-visible/);
 
     enhancer.handleKeyDown({
-      key: '+',
-      code: 'Equal',
+      key: 'ArrowUp',
+      code: 'ArrowUp',
       shiftKey: true,
       target: focusedButton,
       preventDefault() {},
@@ -713,8 +730,8 @@ describe('tiktok-enhanced', () => {
 
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Equal',
-      key: '+',
+      code: 'ArrowUp',
+      key: 'ArrowUp',
       target: { tagName: 'BODY' },
       preventDefault() {},
       stopPropagation() {},
@@ -773,16 +790,16 @@ describe('tiktok-enhanced', () => {
     enhancer.handleMediaActivation({ target: videoB });
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Equal',
-      key: '+',
+      code: 'ArrowUp',
+      key: 'ArrowUp',
       target: { tagName: 'BODY' },
       preventDefault() {},
       stopPropagation() {},
     } as unknown as KeyboardEvent);
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Equal',
-      key: '+',
+      code: 'ArrowUp',
+      key: 'ArrowUp',
       target: { tagName: 'BODY' },
       preventDefault() {},
       stopPropagation() {},
@@ -836,8 +853,8 @@ describe('tiktok-enhanced', () => {
 
     enhancer.handleKeyDown({
       shiftKey: true,
-      code: 'Equal',
-      key: '+',
+      code: 'ArrowUp',
+      key: 'ArrowUp',
       target: { tagName: 'BODY' },
       preventDefault() {},
       stopPropagation() {},
