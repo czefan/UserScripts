@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TikTok 增强
 // @namespace    https://github.com/czefan/UserScripts
-// @version      0.1.1
+// @version      0.1.2
 // @description  自动折叠 TikTok 侧边栏，支持 Shift + ↑ / ↓ 快捷键调节音量并同步官方音量条
 // @author       czefan
 // @license      GPL-3.0
