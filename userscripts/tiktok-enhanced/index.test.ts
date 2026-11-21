@@ -13,7 +13,7 @@ interface TimerEntry {
   ms: number;
 }
 
-class FakeMouseEvent {
+class FakePointerEvent {
   type: string;
   constructor(type: string, init: Record<string, unknown> = {}) {
     this.type = type;
@@ -22,7 +22,6 @@ class FakeMouseEvent {
 }
 
 function createTikTokFixture(overrides: TikTokEnhancerDeps = {}) {
-  const storageMap = new Map<string, string>();
   const timers: TimerEntry[] = [];
   const clearedTimers: number[] = [];
 
@@ -36,17 +35,11 @@ function createTikTokFixture(overrides: TikTokEnhancerDeps = {}) {
       querySelector: () => null,
       querySelectorAll: () => [],
     } as unknown as Document,
-    storage: {
-      getItem: (k: string) => (storageMap.has(k) ? storageMap.get(k)! : null),
-      setItem: (k: string, v: string) => {
-        storageMap.set(k, String(v));
-      },
-    },
     Observer: class {
       observe() {}
       disconnect() {}
     } as unknown as typeof MutationObserver,
-    MouseEventCtor: FakeMouseEvent as unknown as typeof MouseEvent,
+    PointerEventCtor: FakePointerEvent as unknown as typeof PointerEvent,
     setTimer: ((fn: () => void, ms: number) => {
       const id = timers.length + 1;
       timers.push({ id, fn, ms });
@@ -58,7 +51,7 @@ function createTikTokFixture(overrides: TikTokEnhancerDeps = {}) {
     ...overrides,
   });
 
-  return { enhancer, storageMap, timers, clearedTimers };
+  return { enhancer, timers, clearedTimers };
 }
 
 describe('tiktok-enhanced', () => {
@@ -205,13 +198,8 @@ describe('tiktok-enhanced', () => {
     const triggerEvents: string[] = [];
     const trigger = {
       matches: () => false,
-      closest: () => trigger,
+      closest: () => null,
       dispatchEvent: (e: Event) => triggerEvents.push(e.type),
-    };
-    const container = {
-      parentElement: null,
-      querySelector: (sel: string) =>
-        sel.includes('video-sound') ? trigger : null,
     };
     const video = {
       tagName: 'VIDEO',
@@ -219,14 +207,14 @@ describe('tiktok-enhanced', () => {
       duration: 30,
       volume: 0.5,
       muted: false,
-      parentElement: container,
       getBoundingClientRect: () => ({ top: 100, bottom: 900 }),
     };
 
-    const { enhancer, storageMap, timers } = createTikTokFixture({
+    const { enhancer, timers } = createTikTokFixture({
       doc: {
         documentElement: {},
-        querySelector: () => null,
+        querySelector: (sel: string) =>
+          sel.includes('cinema-playback-control-volume') ? trigger : null,
         querySelectorAll: () => [video],
       } as unknown as Document,
     });
@@ -250,62 +238,10 @@ describe('tiktok-enhanced', () => {
     expect(stopped).toBe(true);
     expect(video.volume).toBe(0.55);
     expect(video.muted).toBe(false);
-    expect(triggerEvents.slice(0, 2)).toEqual(['mouseenter', 'mouseover']);
-    expect(JSON.parse(storageMap.get('tiktok_enhanced_volume')!)).toEqual({
-      volume: 0.55,
-      muted: false,
-    });
+    expect(triggerEvents.slice(0, 2)).toEqual(['pointerenter', 'pointerover']);
 
     timers[0].fn();
-    expect(triggerEvents.slice(2)).toEqual(['mouseleave', 'mouseout']);
-  });
-
-  it('持久化手动音量改动并同步记忆音量到后续新视频', () => {
-    const video1 = {
-      tagName: 'VIDEO',
-      paused: false,
-      duration: 15,
-      volume: 0.3,
-      muted: false,
-    };
-    const video2 = {
-      tagName: 'VIDEO',
-      paused: false,
-      duration: 20,
-      volume: 1,
-      muted: false,
-    };
-    let activeVideo = video1;
-
-    const { enhancer, storageMap } = createTikTokFixture({
-      doc: {
-        documentElement: {},
-        querySelector: () => null,
-        querySelectorAll: () => [activeVideo],
-      } as unknown as Document,
-    });
-
-    enhancer.handleMediaActivation({ target: video1 });
-    expect(video1.volume).toBe(0.3);
-
-    video1.volume = 0.7;
-    video1.muted = false;
-    enhancer.handleVolumeChange({ target: video1 });
-    expect(JSON.parse(storageMap.get('tiktok_enhanced_volume')!)).toEqual({
-      volume: 0.7,
-      muted: false,
-    });
-
-    activeVideo = video2;
-    enhancer.handleVolumeChange({ target: video2 });
-    expect(JSON.parse(storageMap.get('tiktok_enhanced_volume')!)).toEqual({
-      volume: 0.7,
-      muted: false,
-    });
-
-    enhancer.handleMediaActivation({ target: video2 });
-    expect(video2.volume).toBe(0.7);
-    expect(video2.muted).toBe(false);
+    expect(triggerEvents.slice(2)).toEqual(['pointerleave', 'pointerout']);
   });
 
   it('未找到原生音量控件时静默回退到直接修改 video.volume', () => {
@@ -339,141 +275,51 @@ describe('tiktok-enhanced', () => {
     expect(video.muted).toBe(false);
   });
 
-  it('通过 React Fiber memoizedProps 同步调用 setVolume/setIsMute', () => {
-    const triggerEvents: string[] = [];
-    const trackEvents: string[] = [];
-    let reactVolume = 0.4;
-    let reactMuted = true;
-    const fiberProps = {
-      get volume() {
-        return reactVolume;
-      },
-      get isMute() {
-        return reactMuted;
-      },
-      setVolume(v: number) {
-        reactVolume = v;
-        video.volume = v;
-      },
-      setIsMute(m: boolean) {
-        reactMuted = m;
-        video.muted = m;
-      },
-    };
-    const trigger = {
-      matches: () => false,
-      __reactFiberTest: {
-        memoizedProps: {},
-        return: { memoizedProps: fiberProps, return: null },
-      },
-      dispatchEvent: (e: Event) => triggerEvents.push(e.type),
-    };
-    const track = {
-      tagName: 'DIV',
-      dispatchEvent: (e: Event) => trackEvents.push(e.type),
-    };
-    const card = {
-      querySelector(sel: string) {
-        if (sel.includes('VolumeControlContainer')) return trigger;
-        if (sel.includes('VolumeSliderTrack')) return track;
-        return null;
-      },
-    };
-    const video = {
-      tagName: 'VIDEO',
-      paused: false,
-      duration: 20,
-      volume: 0.4,
-      muted: true,
-      closest: () => card,
-    };
-
-    const { enhancer } = createTikTokFixture({
-      doc: {
-        documentElement: {},
-        querySelector: () => null,
-        querySelectorAll: () => [video],
-      } as unknown as Document,
-    });
-
-    enhancer.handleKeyDown({
-      shiftKey: true,
-      code: 'ArrowUp',
-      key: 'ArrowUp',
-      target: { tagName: 'BODY' },
-      preventDefault() {},
-      stopPropagation() {},
-    } as unknown as KeyboardEvent);
-
-    expect(reactVolume).toBe(0.1);
-    expect(reactMuted).toBe(false);
-    expect(video.volume).toBe(0.1);
-    expect(video.muted).toBe(false);
-    expect(triggerEvents).toEqual(['mouseenter', 'mouseover']);
-    expect(trackEvents).toHaveLength(0);
-  });
-
-  it('在展开音量条前按正确顺序更新 React Fiber memoizedState Hook API', () => {
+  it('调用音量栏 Fiber props.onVolumeChange，并在边界无变化时跳过重复调用', () => {
     const timeline: string[] = [];
-    let reactVolume = 0.4;
+    let reactVolume = 0.7;
     let reactMuted = true;
-    const playerApi = {
-      setVolume(v: number) {
+    const propsObj = {
+      onVolumeChange(v: number) {
         reactVolume = v;
+        reactMuted = v <= 0;
         video.volume = v;
-        timeline.push(`setVolume:${v}`);
+        video.muted = reactMuted;
+        timeline.push(`onVolumeChange:${v}`);
       },
-      setMute(m: boolean) {
-        reactMuted = m;
-        video.muted = m;
-        timeline.push(`setMute:${m}`);
-      },
-      getStaticBasicPlayerState() {
-        return { volume: reactVolume, mute: reactMuted };
+      onToggleMute() {
+        timeline.push('onToggleMute:unexpected');
       },
     };
     const trigger = {
       matches: () => false,
       __reactFiberTest: {
         memoizedProps: {},
-        memoizedState: null,
         return: {
-          memoizedProps: {},
-          memoizedState: {
-            memoizedState: 0.4,
-            next: {
-              memoizedState: [playerApi, [0, 1]],
-              next: null,
-            },
-          },
+          memoizedProps: propsObj,
           return: null,
         },
       },
       dispatchEvent: (e: Event) => timeline.push(`trigger:${e.type}`),
     };
-    const card = {
-      querySelector(sel: string) {
-        if (sel.includes('VolumeControlContainer')) return trigger;
-        return null;
-      },
-    };
     const video = {
       tagName: 'VIDEO',
       paused: false,
       duration: 20,
-      volume: 0.4,
+      volume: 0.7,
       muted: true,
-      closest: () => card,
     };
 
     const { enhancer } = createTikTokFixture({
       doc: {
         documentElement: {},
-        querySelector: () => null,
+        querySelector: (sel: string) =>
+          sel.includes('cinema-playback-control-volume') ? trigger : null,
         querySelectorAll: () => [video],
       } as unknown as Document,
     });
 
+    // 静音状态下（原音量 70%）按 Shift + ↑：仅调用 onVolumeChange(0.1) 从 10% 起步，绝不调用 onToggleMute
     enhancer.handleKeyDown({
       shiftKey: true,
       code: 'ArrowUp',
@@ -482,19 +328,17 @@ describe('tiktok-enhanced', () => {
       preventDefault() {},
       stopPropagation() {},
     } as unknown as KeyboardEvent);
-
     expect(reactVolume).toBe(0.1);
     expect(reactMuted).toBe(false);
     expect(timeline).toEqual([
-      'setMute:false',
-      'setVolume:0.1',
-      'trigger:mouseenter',
-      'trigger:mouseover',
+      'onVolumeChange:0.1',
+      'trigger:pointerenter',
+      'trigger:pointerover',
     ]);
 
+    // 降至 0% 时同样仅调用 onVolumeChange(0)
     timeline.length = 0;
     video.volume = 0.05;
-    reactVolume = 0.05;
     enhancer.handleKeyDown({
       shiftKey: true,
       code: 'ArrowDown',
@@ -503,27 +347,44 @@ describe('tiktok-enhanced', () => {
       preventDefault() {},
       stopPropagation() {},
     } as unknown as KeyboardEvent);
-
     expect(reactVolume).toBe(0);
     expect(reactMuted).toBe(true);
     expect(timeline).toEqual([
-      'setVolume:0',
-      'setMute:true',
-      'trigger:mouseenter',
-      'trigger:mouseover',
+      'onVolumeChange:0',
+      'trigger:pointerenter',
+      'trigger:pointerover',
     ]);
+
+    // 已在静音边界（0%，muted=true）继续按 Shift + ↓：跳过重复 onVolumeChange，但仍刷新悬停展示
+    timeline.length = 0;
+    enhancer.handleKeyDown({
+      shiftKey: true,
+      code: 'ArrowDown',
+      key: 'ArrowDown',
+      target: { tagName: 'BODY' },
+      preventDefault() {},
+      stopPropagation() {},
+    } as unknown as KeyboardEvent);
+    expect(timeline).toEqual(['trigger:pointerenter', 'trigger:pointerover']);
+
+    // 已在 100% 边界继续按 Shift + ↑：同样跳过重复 onVolumeChange
+    timeline.length = 0;
+    video.volume = 1;
+    video.muted = false;
+    enhancer.handleKeyDown({
+      shiftKey: true,
+      code: 'ArrowUp',
+      key: 'ArrowUp',
+      target: { tagName: 'BODY' },
+      preventDefault() {},
+      stopPropagation() {},
+    } as unknown as KeyboardEvent);
+    expect(timeline).toEqual(['trigger:pointerenter', 'trigger:pointerover']);
   });
 
-  it('仅在命中音量快捷键时清除非可编辑元素焦点以防聚焦环闪现', () => {
-    let blurCount = 0;
+  it('仅在命中音量快捷键时拦截 stopImmediatePropagation', () => {
     let stopImmediateCount = 0;
-    const focusedSection = {
-      tagName: 'SECTION',
-      isContentEditable: false,
-      blur() {
-        blurCount += 1;
-      },
-    };
+    const bodyTarget = { tagName: 'BODY', isContentEditable: false };
     const video = {
       tagName: 'VIDEO',
       paused: false,
@@ -533,8 +394,6 @@ describe('tiktok-enhanced', () => {
     };
     const doc = {
       documentElement: {},
-      body: { tagName: 'BODY' },
-      activeElement: focusedSection,
       querySelector: () => null,
       querySelectorAll: () => [video],
     } as unknown as Document;
@@ -545,128 +404,37 @@ describe('tiktok-enhanced', () => {
       shiftKey: false,
       code: 'KeyM',
       key: 'm',
-      target: focusedSection,
+      target: bodyTarget,
       preventDefault() {},
       stopPropagation() {},
       stopImmediatePropagation() {
         stopImmediateCount += 1;
       },
     } as unknown as KeyboardEvent);
-    expect(blurCount).toBe(0);
     expect(stopImmediateCount).toBe(0);
 
     enhancer.handleKeyDown({
       shiftKey: true,
       code: 'ArrowUp',
       key: 'ArrowUp',
-      target: focusedSection,
+      target: bodyTarget,
       preventDefault() {},
       stopPropagation() {},
       stopImmediatePropagation() {
         stopImmediateCount += 1;
       },
     } as unknown as KeyboardEvent);
-    expect(blurCount).toBe(1);
     expect(stopImmediateCount).toBe(1);
-  });
-
-  it('按住 Shift 期间压制 focus-visible 并在松开后恢复', () => {
-    const attrs = new Map<string, string>();
-    const styles: Array<{ textContent: string }> = [];
-    const doc = {
-      body: { tagName: 'BODY' },
-      head: {
-        appendChild(el: { textContent: string }) {
-          styles.push(el);
-        },
-      },
-      documentElement: {
-        setAttribute(k: string, v: string) {
-          attrs.set(k, v);
-        },
-        removeAttribute(k: string) {
-          attrs.delete(k);
-        },
-      },
-      activeElement: null as unknown,
-      createElement(tag: string) {
-        return { tagName: tag.toUpperCase(), textContent: '' };
-      },
-      querySelector: () => null,
-      querySelectorAll: () => [
-        {
-          tagName: 'VIDEO',
-          paused: false,
-          duration: 20,
-          volume: 0.5,
-          muted: false,
-        },
-      ],
-    };
-
-    const focusedButton = {
-      tagName: 'BUTTON',
-      isContentEditable: false,
-      blur() {
-        doc.activeElement = doc.body;
-      },
-    };
-    const inputEl = {
-      tagName: 'INPUT',
-      isContentEditable: false,
-      blur() {},
-    };
-    doc.activeElement = focusedButton;
-
-    const { enhancer } = createTikTokFixture({
-      doc: doc as unknown as Document,
-    });
-
-    enhancer.handleKeyDown({
-      key: 'Shift',
-      code: 'ShiftLeft',
-      shiftKey: true,
-      target: focusedButton,
-    } as unknown as KeyboardEvent);
-    expect(attrs.get('data-tt-shift-focus-guard')).toBe('1');
-    expect(styles).toHaveLength(1);
-    expect(styles[0].textContent).toMatch(/:focus-visible/);
-
-    enhancer.handleKeyDown({
-      key: 'ArrowUp',
-      code: 'ArrowUp',
-      shiftKey: true,
-      target: focusedButton,
-      preventDefault() {},
-      stopPropagation() {},
-      stopImmediatePropagation() {},
-    } as unknown as KeyboardEvent);
-    expect(doc.activeElement).toBe(doc.body);
-
-    enhancer.handleKeyUp({ key: 'Shift', code: 'ShiftLeft' });
-    expect(attrs.has('data-tt-shift-focus-guard')).toBe(false);
-
-    doc.activeElement = inputEl;
-    enhancer.handleKeyDown({
-      key: 'Shift',
-      code: 'ShiftLeft',
-      shiftKey: true,
-      target: inputEl,
-    } as unknown as KeyboardEvent);
-    expect(attrs.has('data-tt-shift-focus-guard')).toBe(false);
   });
 
   it('支持图文模式 <audio> 贴子的音量调节与 UI 同步', () => {
     const events: string[] = [];
     let reactVolume = 0.5;
-    let reactMuted = false;
 
     const photoCard = {
       offsetWidth: 420,
       offsetHeight: 720,
       getBoundingClientRect: () => ({ top: 140, bottom: 860 }),
-      querySelector: (sel: string) =>
-        sel.includes('VolumeControlContainer') ? trigger : null,
     };
     const photoAudio = {
       tagName: 'AUDIO',
@@ -678,24 +446,15 @@ describe('tiktok-enhanced', () => {
       muted: false,
       closest: () => photoCard,
     };
-    const playerApi = {
-      setVolume(v: number) {
-        reactVolume = v;
-        photoAudio.volume = v;
-      },
-      setMute(m: boolean) {
-        reactMuted = m;
-        photoAudio.muted = m;
-      },
-      getStaticBasicPlayerState() {
-        return { volume: reactVolume, mute: reactMuted };
-      },
-    };
     const trigger = {
       matches: () => false,
       __reactFiberTest: {
-        memoizedProps: {},
-        memoizedState: { memoizedState: [playerApi, []], next: null },
+        memoizedProps: {
+          onVolumeChange(v: number) {
+            reactVolume = v;
+            photoAudio.volume = v;
+          },
+        },
         return: null,
       },
       dispatchEvent: (e: Event) => events.push(e.type),
@@ -717,10 +476,11 @@ describe('tiktok-enhanced', () => {
       getBoundingClientRect: () => ({ top: -900, bottom: -200 }),
     };
 
-    const { enhancer, storageMap } = createTikTokFixture({
+    const { enhancer } = createTikTokFixture({
       doc: {
         documentElement: {},
-        querySelector: () => null,
+        querySelector: (sel: string) =>
+          sel.includes('cinema-playback-control-volume') ? trigger : null,
         querySelectorAll: (sel: string) =>
           sel.includes('audio')
             ? [offscreenVideo, photoAudio]
@@ -740,99 +500,21 @@ describe('tiktok-enhanced', () => {
     expect(photoAudio.volume).toBe(0.55);
     expect(reactVolume).toBe(0.55);
     expect(offscreenVideo.volume).toBe(0.5);
-    expect(events).toEqual(['mouseenter', 'mouseover']);
-    expect(JSON.parse(storageMap.get('tiktok_enhanced_volume')!)).toEqual({
-      volume: 0.55,
-      muted: false,
-    });
-
-    const nextAudio = {
-      tagName: 'AUDIO',
-      paused: false,
-      duration: 18,
-      volume: 1,
-      muted: false,
-      closest: () => photoCard,
-    };
-    enhancer.handleMediaActivation({ target: nextAudio });
-    expect(nextAudio.volume).toBe(0.55);
+    expect(events).toEqual(['pointerenter', 'pointerover']);
   });
 
-  it('切回已访问视频时将最新全局音量重新同步到该视频', () => {
-    const videoA = {
-      tagName: 'VIDEO',
-      paused: false,
-      duration: 20,
-      volume: 0.2,
-      muted: false,
-    };
-    const videoB = {
-      tagName: 'VIDEO',
-      paused: false,
-      duration: 20,
-      volume: 0.2,
-      muted: false,
-    };
-    let activeVideo = videoA;
-
-    const { enhancer } = createTikTokFixture({
-      doc: {
-        documentElement: {},
-        querySelector: () => null,
-        querySelectorAll: () => [activeVideo],
-      } as unknown as Document,
-    });
-
-    enhancer.handleMediaActivation({ target: videoA });
-    expect(videoA.volume).toBe(0.2);
-
-    activeVideo = videoB;
-    enhancer.handleMediaActivation({ target: videoB });
-    enhancer.handleKeyDown({
-      shiftKey: true,
-      code: 'ArrowUp',
-      key: 'ArrowUp',
-      target: { tagName: 'BODY' },
-      preventDefault() {},
-      stopPropagation() {},
-    } as unknown as KeyboardEvent);
-    enhancer.handleKeyDown({
-      shiftKey: true,
-      code: 'ArrowUp',
-      key: 'ArrowUp',
-      target: { tagName: 'BODY' },
-      preventDefault() {},
-      stopPropagation() {},
-    } as unknown as KeyboardEvent);
-    expect(videoB.volume).toBe(0.3);
-
-    activeVideo = videoA;
-    enhancer.handleMediaActivation({ target: videoA });
-    expect(videoA.volume).toBe(0.3);
-    expect(videoA.muted).toBe(false);
-  });
-
-  it('React 播放器 Hook 抛错时仍正常降级修改原生媒体音量', () => {
-    const brokenApi = {
-      setVolume() {
-        throw new Error('stale hook');
-      },
-      setMute() {
-        throw new Error('stale hook');
-      },
-    };
+  it('React 音量回调抛错时仍正常降级修改原生媒体音量', () => {
     const trigger = {
       matches: () => false,
       __reactFiberTest: {
-        memoizedProps: {},
-        memoizedState: { memoizedState: [brokenApi, []], next: null },
+        memoizedProps: {
+          onVolumeChange() {
+            throw new Error('stale callback');
+          },
+        },
         return: null,
       },
       dispatchEvent() {},
-    };
-    const card = {
-      querySelector: (sel: string) =>
-        sel.includes('VolumeControlContainer') ? trigger : null,
     };
     const video = {
       tagName: 'VIDEO',
@@ -840,13 +522,13 @@ describe('tiktok-enhanced', () => {
       duration: 20,
       volume: 0.4,
       muted: true,
-      closest: () => card,
     };
 
     const { enhancer } = createTikTokFixture({
       doc: {
         documentElement: {},
-        querySelector: () => null,
+        querySelector: (sel: string) =>
+          sel.includes('cinema-playback-control-volume') ? trigger : null,
         querySelectorAll: () => [video],
       } as unknown as Document,
     });
@@ -901,5 +583,64 @@ describe('tiktok-enhanced', () => {
     observers[0].cb([], observers[0] as unknown as MutationObserver);
     expect(clicks).toBe(0);
     expect(observers[0].disconnected).toBe(true);
+  });
+
+  it('调节音量期间通过根节点标记与静态 CSS 保持底栏常亮并在超时后移除', () => {
+    const rootAttrs = new Map<string, string>();
+    const styles: Array<{ textContent: string }> = [];
+    const cinemaVolBox = {
+      matches: () => false,
+      dispatchEvent() {},
+    };
+    const video = {
+      tagName: 'VIDEO',
+      paused: false,
+      duration: 30,
+      volume: 0.5,
+      muted: false,
+    };
+
+    const { enhancer, timers } = createTikTokFixture({
+      doc: {
+        head: {
+          appendChild(el: { textContent: string }) {
+            styles.push(el);
+          },
+        },
+        documentElement: {
+          setAttribute(k: string, v: string) {
+            rootAttrs.set(k, v);
+          },
+          removeAttribute(k: string) {
+            rootAttrs.delete(k);
+          },
+        },
+        createElement(tag: string) {
+          return { tagName: tag.toUpperCase(), textContent: '' };
+        },
+        querySelector: (sel: string) =>
+          sel.includes('cinema-playback-control-volume') ? cinemaVolBox : null,
+        querySelectorAll: () => [video],
+      } as unknown as Document,
+    });
+
+    enhancer.handleKeyDown({
+      shiftKey: true,
+      code: 'ArrowUp',
+      key: 'ArrowUp',
+      target: { tagName: 'BODY' },
+      preventDefault() {},
+      stopPropagation() {},
+    } as unknown as KeyboardEvent);
+
+    expect(rootAttrs.get('data-tt-chrome-bright')).toBe('1');
+    expect(styles).toHaveLength(1);
+    expect(styles[0].textContent).toContain('anchoring-playback-chrome');
+    expect(styles[0].textContent).toContain('opacity: 1 !important');
+
+    // 音量条展示超时结束后移除标记，样式标签仅注入一次
+    timers[0].fn();
+    expect(rootAttrs.has('data-tt-chrome-bright')).toBe(false);
+    expect(styles).toHaveLength(1);
   });
 });
