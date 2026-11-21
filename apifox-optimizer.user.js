@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Apifox 界面紧凑优化
 // @namespace    https://github.com/czefan/UserScripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  优化 Apifox Web 端布局：折叠按钮置顶、46px 极窄侧边栏、35px 紧凑顶栏与标签栏高度压缩
 // @author       czefan
 // @license      GPL-3.0
@@ -37,10 +37,11 @@
 
   // userscripts/apifox-optimizer/compact.ts
   var STYLE_ID = "apifox-compact-optimizer-style";
+  var PRIMARY_SIDEBAR_SELECTOR = "#root > div > section > div.flex.h-full > div:first-child";
   var COMPACT_STYLES = `
         /* 1. 一级侧边导航栏宽度收窄为 46px，隐藏原生拖拽手柄 */
-        #root section > .flex.h-full > div:first-child { width: 46px !important; min-width: 46px !important; max-width: 46px !important; padding: 0 !important; overflow-x: hidden !important; }
-        #root section > .flex.h-full > div:first-child > div.drag { display: none !important; }
+        ${PRIMARY_SIDEBAR_SELECTOR} { width: 46px !important; min-width: 46px !important; max-width: 46px !important; padding: 0 !important; overflow-x: hidden !important; }
+        ${PRIMARY_SIDEBAR_SELECTOR} > div.drag { display: none !important; }
 
         /* 2. 定位原生二级菜单折叠按钮至左侧栏顶部，设置 z-index 确保低于模态弹窗 */
         div[class*="footer-"] > button.ui-btn-icon-only:first-child {
@@ -69,16 +70,16 @@
         }
 
         /* 3. 项目 Logo 缩放为 28px 并水平居中，位于顶部折叠按钮下方 */
-        #root section > .flex.h-full > div:first-child [class*="logoContainer"] { transform: scale(0.7) !important; transform-origin: center center !important; margin: 0 auto !important; display: flex !important; justify-content: center !important; align-items: center !important; }
+        ${PRIMARY_SIDEBAR_SELECTOR} [class*="logoContainer"] { transform: scale(0.7) !important; transform-origin: center center !important; margin: 0 auto !important; display: flex !important; justify-content: center !important; align-items: center !important; }
 
         /* 4. 隐藏导航项文本并保留图标，统一尺寸为 34x34px */
-        #root section > .flex.h-full > div:first-child a > span:not([role="img"]),
-        #root section > .flex.h-full > div:first-child button > :not([class*="icon"]):not([role="img"]) { display: none !important; }
-        #root section > .flex.h-full > div:first-child a,
-        #root section > .flex.h-full > div:first-child button:not(.ui-btn-icon-only) { width: 34px !important; height: 34px !important; min-height: 34px !important; max-height: 34px !important; padding: 0 !important; margin: 4px auto !important; display: flex !important; justify-content: center !important; align-items: center !important; border-radius: 8px !important; box-sizing: border-box !important; transition: background-color 0.15s ease !important; }
-        #root section > .flex.h-full > div:first-child :is(a, button) .appicon { font-size: 18px !important; margin: 0 !important; padding: 0 !important; }
-        #root section > .flex.h-full > div:first-child button > [class*="icon"] { margin: 0 !important; padding: 0 !important; display: flex !important; }
-        #root section > .flex.h-full > div:first-child .ui-divider { width: 24px !important; min-width: 24px !important; margin: 8px auto !important; }
+        ${PRIMARY_SIDEBAR_SELECTOR} a > span:not([role="img"]),
+        ${PRIMARY_SIDEBAR_SELECTOR} button > :not([class*="icon"]):not([role="img"]) { display: none !important; }
+        ${PRIMARY_SIDEBAR_SELECTOR} a,
+        ${PRIMARY_SIDEBAR_SELECTOR} button:not(.ui-btn-icon-only) { width: 34px !important; height: 34px !important; min-height: 34px !important; max-height: 34px !important; padding: 0 !important; margin: 4px auto !important; display: flex !important; justify-content: center !important; align-items: center !important; border-radius: 8px !important; box-sizing: border-box !important; transition: background-color 0.15s ease !important; }
+        ${PRIMARY_SIDEBAR_SELECTOR} :is(a, button) .appicon { font-size: 18px !important; margin: 0 !important; padding: 0 !important; }
+        ${PRIMARY_SIDEBAR_SELECTOR} button > [class*="icon"] { margin: 0 !important; padding: 0 !important; display: flex !important; }
+        ${PRIMARY_SIDEBAR_SELECTOR} .ui-divider { width: 24px !important; min-width: 24px !important; margin: 8px auto !important; }
 
         /* 5. 顶栏高度压缩至 35px，面包屑垂直居中，保持左右 16px 边距 */
         div[class*="webContainer"] { display: flex !important; flex-direction: column !important; height: 100% !important; max-height: 100% !important; overflow: hidden !important; flex: 1 1 auto !important; }
@@ -97,11 +98,18 @@
         [class*="main-tabs"] > .ui-tabs-nav .ui-tabs-tab { padding: 3px 12px !important; height: 32px !important; font-size: 13px !important; }
 
         /* 8. 调试/设计栏与请求地址栏内边距压缩 */
-        .httpApi_tabConfig_container { padding: 3px 0px 3px 16px !important; min-height: 30px !important; }
+        .httpApi_tabConfig_container { padding: 0 16px !important; margin: 0 !important; min-height: 30px !important; height: 30px !important; }
+        .ui-tabs.ui-tabs-soft-primary-button > .httpApi_tabConfig_container .ui-tabs-tab { padding: 3px 8px !important; margin-top: 0 !important; margin-bottom: 0 !important; font-size: 13px !important; }
+        .ui-tabs:not(.ui-tabs-soft-primary-button) > .httpApi_tabConfig_container .ui-tabs-nav-list { gap: 14px !important; }
+        .ui-tabs:not(.ui-tabs-soft-primary-button) > .httpApi_tabConfig_container .ui-tabs-tab { padding: 3px 0 !important; margin: 0 !important; font-size: 13px !important; }
         [class*="tab-bar-"] { min-height: 30px !important; }
-        [class*="tab-bar-"] > div > div > .ui-tabs .ui-tabs-tab { padding: 3px 8px !important; font-size: 13px !important; }
         [class*="tab-bar-"] .flex-1.items-center { height: 30px !important; display: flex !important; align-items: center !important; }
+        .px-5.py-3.flex:has([class*="http-api-url-input-wrapper"]),
         .px-5.py-3.flex[style*="border-bottom"] { padding-top: 6px !important; padding-bottom: 6px !important; align-items: center !important; }
+        .main-input-bar { padding-top: 6px !important; padding-bottom: 6px !important; margin-top: 0 !important; margin-bottom: 0 !important; min-height: 0 !important; align-items: center !important; }
+        .main-input-bar .url-col,
+        .main-input-bar .action-col .ui-btn { height: 30px !important; min-height: 30px !important; }
+        .main-input-bar .url-col .ui-input { height: 28px !important; min-height: 28px !important; }
     `;
   function injectStyles(doc = document) {
     return injectStyle(COMPACT_STYLES, { id: STYLE_ID, doc });
@@ -112,7 +120,7 @@
       (e) => {
         const target = e.target;
         const item = target?.closest(
-          "#root section > .flex.h-full > div:first-child :is(a, button)"
+          `${PRIMARY_SIDEBAR_SELECTOR} :is(a, button)`
         );
         if (item && !item.title) {
           const text = item.textContent?.trim();
